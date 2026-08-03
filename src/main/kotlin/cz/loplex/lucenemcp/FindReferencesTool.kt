@@ -9,6 +9,9 @@ data class ReferenceMatch(val path: String, val line: Int, val kind: String, val
 
 /** One file's data needed across both passes of [findReferences] — parsed once, reused twice. */
 private class FileContext(val file: File, val relativePath: String, val languageName: String, val parsed: ParsedFile) {
+    // Canonical so it compares equal to resolveImportTarget's results (also canonicalFile) regardless
+    // of how `root` was spelled on the command line (relative, trailing slash, symlink, ...).
+    val canonicalFile: File = file.canonicalFile
     lateinit var definitionRanges: Set<LongRange>
     lateinit var importInfo: ImportInfo
 }
@@ -43,9 +46,9 @@ fun findReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCac
     for (ctx in contexts) {
         val hits = definitionHitsInFile(ctx.parsed, ctx.languageName, symbol)
         ctx.definitionRanges = hits.map { it.range }.toHashSet()
-        ctx.importInfo = extractImportInfo(ctx.parsed, ctx.languageName)
+        ctx.importInfo = extractImportInfo(ctx.parsed, ctx.languageName, ctx.file, root)
         if (hits.isNotEmpty()) {
-            definingFiles.add(ctx.file)
+            definingFiles.add(ctx.canonicalFile)
             if (IMPORT_QUERIES_BY_LANGUAGE[ctx.languageName]?.packageAware == true && ctx.importInfo.packageName.isNotEmpty()) {
                 definingPackages.add(ctx.importInfo.packageName)
             }
@@ -55,8 +58,23 @@ fun findReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCac
     // package/import context to narrow against, so filtering would only produce false negatives.
     val canFilter = definingFiles.isNotEmpty()
 
+    // Languages/forms resolveImportTarget() can pin to a specific file (TS/JS relative imports,
+    // Python "from X import Y") get a precise per-statement check instead of the coarse whole-file
+    // name mention: a statement whose resolved target is a real, non-defining project file proves
+    // this particular import isn't where the symbol comes from, so it's not counted — but only that
+    // one statement, other imports in the same file are still judged on their own merits. A
+    // statement resolveImportTarget couldn't resolve (bare specifier, external module) falls back
+    // to the old permissive name-mention check, same as before this existed.
     fun isCandidateFile(ctx: FileContext): Boolean {
-        if (!canFilter || ctx.file in definingFiles) return true
+        if (!canFilter || ctx.canonicalFile in definingFiles) return true
+
+        if (ctx.languageName in PATH_RESOLVABLE_LANGUAGES) {
+            return ctx.importInfo.records.any { record ->
+                val mentionsSymbol = record.isWildcard || symbol in record.importedNames
+                mentionsSymbol && (record.resolvedFile == null || record.resolvedFile in definingFiles)
+            }
+        }
+
         if (ctx.importInfo.hasWildcardImport || symbol in ctx.importInfo.importedNames) return true
         val packageAware = IMPORT_QUERIES_BY_LANGUAGE[ctx.languageName]?.packageAware == true
         return packageAware && ctx.importInfo.packageName in definingPackages

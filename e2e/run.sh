@@ -59,6 +59,10 @@ setup_fixture() {
     printf 'package pkg.other\n\nimport UserService.login\n\nfun run2() {\n    login()\n}\n' > "$FIXTURE_DIR/src/Caller.kt"
     printf 'TODO: refactor UserService\n' > "$FIXTURE_DIR/README.md"
     printf 'should never be indexed or grepped\n' > "$FIXTURE_DIR/ignored/vendor.js"
+
+    printf 'export class Widget {}\n' > "$FIXTURE_DIR/src/widget.ts"
+    printf 'export class Unrelated {}\n' > "$FIXTURE_DIR/src/other.ts"
+    printf "import { Widget } from './other';\nfunction run() { new Widget(); }\n" > "$FIXTURE_DIR/src/consumer.ts"
 }
 
 start_server() {
@@ -284,6 +288,13 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_not_contains "find_references drops the unrelated same-named parameter (different package, no import)" "$text" "Unrelated.kt"
 assert_contains "find_references keeps the import-connected call site" "$text" "src/Caller.kt:6 [call]"
+
+echo "=== find_references: TS import path resolution narrows to the actual resolved file, not just name mention ==="
+call_tool "find_references" '{"symbol":"Widget"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_references reports Widget's own definition" "$text" "src/widget.ts:1 [definition]"
+assert_not_contains "find_references drops consumer.ts (its import resolves to other.ts, which does not define Widget)" "$text" "consumer.ts"
 
 echo "=== find_references: unknown symbol reports no references ==="
 call_tool "find_references" '{"symbol":"TotallyUnknownSymbolZZZ"}'

@@ -91,13 +91,14 @@ fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: Strin
 private val PLAIN_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
 /**
- * Extracts [ImportInfo] for [parsed] using [languageName]'s [ImportQueryConfig] (see
- * [IMPORT_QUERIES_BY_LANGUAGE]). Returns an empty/permissive [ImportInfo] for languages without a
- * config — callers must treat that as "nothing known", never as "imports nothing".
+ * Extracts [ImportInfo] for [parsed] (at [file], inside [root]) using [languageName]'s
+ * [ImportQueryConfig] (see [IMPORT_QUERIES_BY_LANGUAGE]). Returns an empty/permissive [ImportInfo]
+ * for languages without a config — callers must treat that as "nothing known", never as "imports
+ * nothing". Each import statement becomes one [ImportRecord], resolved via [resolveImportTarget]
+ * for the languages/forms that support it.
  */
-fun extractImportInfo(parsed: ParsedFile, languageName: String): ImportInfo {
-    val config = IMPORT_QUERIES_BY_LANGUAGE[languageName]
-        ?: return ImportInfo(packageName = "", importedNames = emptySet(), hasWildcardImport = false)
+fun extractImportInfo(parsed: ParsedFile, languageName: String, file: File, root: File): ImportInfo {
+    val config = IMPORT_QUERIES_BY_LANGUAGE[languageName] ?: return ImportInfo(packageName = "", records = emptyList())
 
     var packageName = ""
     val packageQuery = config.packageQuery
@@ -115,20 +116,22 @@ fun extractImportInfo(parsed: ParsedFile, languageName: String): ImportInfo {
         }
     }
 
-    val importedNames = mutableSetOf<String>()
-    var hasWildcardImport = false
+    val records = mutableListOf<ImportRecord>()
     compiledQuery(languageName, config.importQuery)?.let { query ->
         val cursor = TSQueryCursor()
         cursor.exec(query, parsed.tree.rootNode)
         val match = TSQueryMatch()
         while (cursor.nextMatch(match)) {
             val importNode = match.captures.firstOrNull { query.getCaptureNameForId(it.index) == "import" }?.node ?: continue
+            val importedNames = mutableSetOf<String>()
             collectPlainIdentifierLeaves(importNode, parsed, importedNames)
-            if (containsNodeType(importNode, config.wildcardNodeTypes)) hasWildcardImport = true
+            val isWildcard = containsNodeType(importNode, config.wildcardNodeTypes)
+            val resolvedFile = resolveImportTarget(importNode, parsed, file, root, languageName)
+            records.add(ImportRecord(importedNames, isWildcard, resolvedFile))
         }
     }
 
-    return ImportInfo(packageName, importedNames, hasWildcardImport)
+    return ImportInfo(packageName, records)
 }
 
 private fun collectPlainIdentifierLeaves(node: TSNode, parsed: ParsedFile, into: MutableSet<String>) {

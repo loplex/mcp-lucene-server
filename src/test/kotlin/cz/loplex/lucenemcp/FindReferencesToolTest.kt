@@ -230,4 +230,83 @@ class FindReferencesToolTest {
         assertTrue(after.contains("App.kt:2"))
         assertTrue(after.contains("App.kt:3"))
     }
+
+    @Test
+    fun `TS import path resolution drops a bare hit whose import resolves elsewhere, not just to any file mentioning the name`(@TempDir tempDir: File) {
+        File(tempDir, "real.ts").writeText("export class Config {}\n")
+        File(tempDir, "other.ts").writeText("export class Unrelated {}\n")
+        // Consumer's import statement mentions "Config" by name but its module path resolves to
+        // other.ts, a real project file that does NOT define Config — the old name-only heuristic
+        // would have kept this file as a candidate purely because the import statement's text
+        // contains "Config".
+        File(tempDir, "consumer.ts").writeText(
+            """
+            import { Config } from './other';
+            function run() { new Config(); }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "Config", 50)
+        assertTrue(result.contains("real.ts:1 [definition]"))
+        assertFalse(result.contains("consumer.ts"))
+    }
+
+    @Test
+    fun `TS import path resolution keeps a bare hit whose import resolves to the real defining file`(@TempDir tempDir: File) {
+        File(tempDir, "real.ts").writeText("export class Config {}\n")
+        File(tempDir, "consumer.ts").writeText(
+            """
+            import { Config } from './real';
+            function run() { new Config(); }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "Config", 50)
+        assertTrue(result.contains("consumer.ts:2"))
+    }
+
+    @Test
+    fun `TS bare package specifier is unresolvable and falls back to the permissive name-mention check`(@TempDir tempDir: File) {
+        File(tempDir, "real.ts").writeText("export class Config {}\n")
+        File(tempDir, "consumer.ts").writeText(
+            """
+            import { Config } from 'some-external-lib';
+            function run() { new Config(); }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "Config", 50)
+        assertTrue(result.contains("consumer.ts:2"))
+    }
+
+    @Test
+    fun `Python import path resolution drops a bare hit whose relative import resolves elsewhere`(@TempDir tempDir: File) {
+        File(tempDir, "real.py").writeText("class Config:\n    pass\n")
+        File(tempDir, "other.py").writeText("class Unrelated:\n    pass\n")
+        File(tempDir, "consumer.py").writeText(
+            """
+            from .other import Config
+            Config()
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "Config", 50)
+        assertTrue(result.contains("real.py:1 [definition]"))
+        assertFalse(result.contains("consumer.py"))
+    }
+
+    @Test
+    fun `Python import path resolution keeps a bare hit whose absolute import resolves to the real defining file`(@TempDir tempDir: File) {
+        val pkgDir = File(tempDir, "pkg").apply { mkdirs() }
+        File(pkgDir, "mod.py").writeText("class Config:\n    pass\n")
+        File(tempDir, "consumer.py").writeText(
+            """
+            from pkg.mod import Config
+            Config()
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "Config", 50)
+        assertTrue(result.contains("consumer.py:2"))
+    }
 }

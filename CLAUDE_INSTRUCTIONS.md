@@ -25,9 +25,13 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes seven too
   imports), tagged with a cheap `[kind]` (`call`/`type`/`member`/`import`/`definition`/`reference`).
   Same AST basis as `find_definition`. Bare (unqualified) hits are narrowed by import/package
   awareness — a file with no import and no shared package as any real definition is skipped for
-  those; qualified `receiver.symbol` access is never filtered this way. Still not a full
-  type-resolving scope resolver, so two same-named symbols that are otherwise both importable/visible
-  aren't distinguished. Same supported extensions as `find_definition`.
+  those; qualified `receiver.symbol` access is never filtered this way. For TS/JS/Python, a relative
+  (`./foo`) or absolute (`pkg.mod`) import path is resolved to the actual on-disk file it points to,
+  so an import that merely mentions the symbol's name but resolves to a different, real project file
+  no longer counts as a match on its own — bare/external specifiers (npm packages, stdlib) that can't
+  be resolved on disk still fall back to the name-mention check. Still not a full type-resolving scope
+  resolver, so two same-named symbols that are otherwise both importable/visible aren't distinguished.
+  Same supported extensions as `find_definition`.
 - `read_file` — read a file, optionally restricted to a line range, to jump to an exact location
   found by `search_code`/`grep_code`/`find_definition`/`find_references` without re-requesting the
   whole file.

@@ -1,6 +1,7 @@
 package cz.loplex.lucenemcp
 
 import org.treesitter.TSNode
+import java.io.File
 
 /**
  * One tree-sitter query pattern identifying a definition of [kind] (e.g. "class", "function").
@@ -190,17 +191,35 @@ private fun fieldIs(parent: TSNode, fieldName: String, node: TSNode): Boolean {
 }
 
 /**
+ * One import/use statement's contribution to [ImportInfo]. [importedNames] is every
+ * identifier-shaped leaf found inside that one statement (path segments and aliases alike) — a
+ * cheap over-approximation, not a resolved symbol table: it also catches Go's bare single-segment
+ * import string (`import "fmt"` behaves like a local name), which happens to be exactly the name
+ * Go code qualifies with.
+ *
+ * [resolvedFile] is the on-disk file this *specific* statement's module path points to, for
+ * languages/forms [resolveImportTarget] can resolve (TS/JS relative imports, Python `from X import
+ * Y`) — null means either unresolvable (bare/package specifier, external module) or not attempted
+ * for this language/form, and callers must treat null as "unknown", not "resolves to nothing": see
+ * `isCandidateFile` in `FindReferencesTool.kt` for why a null here still falls back to the old
+ * name-mention heuristic instead of dropping the statement.
+ */
+data class ImportRecord(val importedNames: Set<String>, val isWildcard: Boolean, val resolvedFile: File?)
+
+/**
  * A file's package/module declaration and imports, cheap to extract and used to narrow
  * `find_references` candidates — see [IMPORT_QUERIES_BY_LANGUAGE] and `extractImportInfo` in
  * `AstParser.kt`. [packageName] is `""` for files with no package declaration (Kotlin/Java's
  * "default package") or for languages without this concept — comparisons only happen for
  * [ImportQueryConfig.packageAware] languages, so the sentinel is never compared across languages.
- * [importedNames] is every identifier-shaped leaf found inside an import/use statement (path
- * segments and aliases alike) — a cheap over-approximation, not a resolved symbol table: it also
- * catches Go's bare single-segment import string (`import "fmt"` behaves like a local name), which
- * happens to be exactly the name Go code qualifies with.
+ * [records] is one entry per import statement (see [ImportRecord]); [importedNames]/
+ * [hasWildcardImport] are the flattened union, kept for languages that only ever do the coarse
+ * whole-file check (Kotlin/Java/Go — see `isCandidateFile`).
  */
-data class ImportInfo(val packageName: String, val importedNames: Set<String>, val hasWildcardImport: Boolean)
+data class ImportInfo(val packageName: String, val records: List<ImportRecord>) {
+    val importedNames: Set<String> get() = records.flatMap { it.importedNames }.toSet()
+    val hasWildcardImport: Boolean get() = records.any { it.isWildcard }
+}
 
 /**
  * Where to find, in a language's grammar, the package/module declaration ([packageQuery], capturing

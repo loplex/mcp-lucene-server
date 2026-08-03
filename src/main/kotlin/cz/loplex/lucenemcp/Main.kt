@@ -161,6 +161,16 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
     ))
 
     tools.add(tool(
+        name = "find_definition",
+        description = "Finds where a symbol is DEFINED (class/interface/object/function/property/...), as opposed to grep_code, which finds every mention including call sites, imports, and comments. This is a per-language heuristic over regular expressions (not a real AST parser), so it can have false negatives on unusual code styles. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs. Always reads current file content, independent of the index.",
+        properties = linkedMapOf(
+            "symbol" to prop("string", "Exact symbol name (identifier), e.g. 'UserService'."),
+            "maxMatches" to prop("number", "Maximum number of returned definitions (default $DEFAULT_GREP_LIMIT).")
+        ),
+        required = listOf("symbol")
+    ))
+
+    tools.add(tool(
         name = "reindex_code",
         description = "Explicitly runs an incremental sync of the Lucene index (search_code) with the filesystem and returns the number of added/updated/deleted documents. The index is normally kept fresh in the background by a file watcher; this tool is for forced verification or in case the watcher missed something (e.g. the OS watched-directory limit was hit).",
         properties = linkedMapOf(),
@@ -216,6 +226,7 @@ fun handleToolCall(
             "grep_code" -> handleGrepCode(arguments, root)
             "read_file" -> handleReadFile(arguments, root)
             "list_files" -> handleListFiles(arguments, root)
+            "find_definition" -> handleFindDefinition(arguments, root)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -314,6 +325,13 @@ private fun handleListFiles(arguments: JsonObject, root: File): String {
     val pattern = arguments.get("pattern")?.asString
     val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIST_LIMIT
     return runListFiles(root, pattern, limit)
+}
+
+private fun handleFindDefinition(arguments: JsonObject, root: File): String {
+    val symbol = arguments.get("symbol")?.asString
+    if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
+    val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
+    return runFindDefinition(root, symbol, maxMatches)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

@@ -164,11 +164,12 @@ send "tools/list" '{}'
 advance_response_line
 line=$(fetch_raw "$RESPONSE_LINE")
 tool_names=$(echo "$line" | jq -r '.result.tools[].name' | sort | tr '\n' ' ')
-assert_contains "tools/list exposes all 5 tools" "$tool_names" "grep_code"
-assert_contains "tools/list exposes all 5 tools" "$tool_names" "list_files"
-assert_contains "tools/list exposes all 5 tools" "$tool_names" "read_file"
-assert_contains "tools/list exposes all 5 tools" "$tool_names" "reindex_code"
-assert_contains "tools/list exposes all 5 tools" "$tool_names" "search_code"
+assert_contains "tools/list exposes all 6 tools" "$tool_names" "find_definition"
+assert_contains "tools/list exposes all 6 tools" "$tool_names" "grep_code"
+assert_contains "tools/list exposes all 6 tools" "$tool_names" "list_files"
+assert_contains "tools/list exposes all 6 tools" "$tool_names" "read_file"
+assert_contains "tools/list exposes all 6 tools" "$tool_names" "reindex_code"
+assert_contains "tools/list exposes all 6 tools" "$tool_names" "search_code"
 
 echo "=== search_code ==="
 call_tool "search_code" '{"query":"content:UserService","limit":5}'
@@ -234,6 +235,20 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "list_files finds App.kt" "$text" "src/App.kt"
 assert_not_contains "list_files excludes README.md for *.kt filter" "$text" "README.md"
+
+echo "=== find_definition: finds the class definition, not a mention ==="
+call_tool "find_definition" '{"symbol":"UserService"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_definition locates the class" "$text" "src/App.kt:1"
+assert_contains "find_definition tags the kind" "$text" "[class]"
+assert_not_contains "find_definition skips the README mention" "$text" "README.md"
+
+echo "=== find_definition: unknown symbol reports no definition ==="
+call_tool "find_definition" '{"symbol":"TotallyUnknownSymbolZZZ"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_definition reports absence cleanly" "$text" "No definition found"
 
 echo "=== reindex_code: explicit resync reports a summary ==="
 call_tool "reindex_code" '{}'

@@ -309,4 +309,69 @@ class FindReferencesToolTest {
         val result = runFindReferences(tempDir, "Config", 50)
         assertTrue(result.contains("consumer.py:2"))
     }
+
+    @Test
+    fun `TS qualified member access is kept in a non-candidate file, but a same-named object literal key is not`(@TempDir tempDir: File) {
+        File(tempDir, "def.ts").writeText("export function helper() {}\n")
+        File(tempDir, "unrelated.ts").writeText(
+            """
+            function run(receiver) {
+                receiver.helper();
+                const obj = { helper: 1 };
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "helper", 50)
+        assertTrue(result.contains("def.ts:1 [definition]"))
+        assertTrue(result.contains("unrelated.ts:2")) // receiver.helper() — resolved by receiver's type, not by imports
+        assertFalse(result.contains("unrelated.ts:3")) // { helper: 1 } — coincidental object-literal key, not a real usage
+    }
+
+    @Test
+    fun `Go qualified selector access is kept across packages, but a same-named struct field or literal key is not`(@TempDir tempDir: File) {
+        File(tempDir, "def.go").writeText("package pkga\n\nfunc Helper() {}\n")
+        File(tempDir, "unrelated.go").writeText(
+            """
+            package pkgb
+
+            type Shape struct {
+                Helper string
+            }
+
+            func run(s Shape) {
+                v := s.Helper
+                _ = v
+                x := Shape{Helper: "y"}
+                _ = x
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "Helper", 50)
+        assertTrue(result.contains("unrelated.go:8")) // s.Helper — resolved by s's type, not by package/import
+        assertFalse(result.contains("unrelated.go:4")) // struct field declaration, unrelated to the def in pkga
+        assertFalse(result.contains("unrelated.go:10")) // Shape{Helper: "y"} composite literal key
+    }
+
+    @Test
+    fun `Rust qualified field access is kept without a use import, but a same-named struct field or literal key is not`(@TempDir tempDir: File) {
+        File(tempDir, "def.rs").writeText("pub fn helper() {}\n")
+        File(tempDir, "unrelated.rs").writeText(
+            """
+            struct Shape {
+                helper: String,
+            }
+            fn run(s: Shape) {
+                let v = s.helper;
+                let x = Shape { helper: String::from("y") };
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "helper", 50)
+        assertTrue(result.contains("unrelated.rs:5")) // s.helper — resolved by s's type, no `use` needed
+        assertFalse(result.contains("unrelated.rs:2")) // struct field declaration
+        assertFalse(result.contains("unrelated.rs:6")) // Shape { helper: ... } struct literal key
+    }
 }

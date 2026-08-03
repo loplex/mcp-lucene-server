@@ -165,10 +165,18 @@ fun classifyReferenceKind(node: TSNode, rules: ReferenceRules): String {
  * True if [node] sits on the qualified/selector side of a member access (`receiver.node`), and is
  * therefore resolved by the receiver's own type, not by [node]'s file's imports or package — import-
  * aware candidate filtering (see [ImportInfo]/`isCandidateFile` in `FindReferencesTool.kt`) must never
- * drop these. Go/TS/JS/Rust already flag this via a dedicated node type ([ReferenceRules.memberNodeTypes]),
- * so [classifyReferenceKind] returning "member" is enough for them. Kotlin/Java/Python reuse the very
- * same identifier node type for both the qualified and the bare position, so this checks the parent's
- * shape directly for those three instead.
+ * drop these.
+ *
+ * Every supported language reuses its member-access node type for other, unrelated positions too —
+ * so a plain "is this node's own type one of [ReferenceRules.memberNodeTypes]" check is not enough
+ * on its own ([classifyReferenceKind] uses exactly that, which is fine for *labeling* a hit "member"
+ * once it's already been decided the hit is included, but too broad for *deciding* inclusion): TS/JS
+ * `property_identifier` is also an interface field name (`{ symbol: string }`) and an object literal
+ * key (`{ symbol: 1 }`), Go/Rust `field_identifier` is also a struct field declaration and a struct
+ * literal key — none of those are resolved by a receiver's type, so they must stay subject to
+ * candidate filtering like any bare identifier. This checks the parent's exact shape (member
+ * expression/selector/field-access with this node in the specific "property"/"field" position) for
+ * every language, the same way it already did for Kotlin/Java/Python.
  */
 fun isQualifiedAccess(node: TSNode, languageName: String): Boolean {
     val parent = node.parent ?: return false
@@ -181,6 +189,9 @@ fun isQualifiedAccess(node: TSNode, languageName: String): Boolean {
             else -> false
         }
         "python" -> parent.type == "attribute" && fieldIs(parent, "attribute", node)
+        "typescript", "tsx", "javascript" -> parent.type == "member_expression" && fieldIs(parent, "property", node)
+        "go" -> parent.type == "selector_expression" && fieldIs(parent, "field", node)
+        "rust" -> parent.type == "field_expression" && fieldIs(parent, "field", node)
         else -> false
     }
 }

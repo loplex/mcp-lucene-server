@@ -4,9 +4,16 @@ You are equipped with a code-search MCP server backed by Apache Lucene and tree-
 replace the built-in Grep/Glob/Read tools for this project. It exposes seven tools:
 
 - `search_code` — analyzed/fuzzy fulltext search (word-form aware) over a persistent, auto-synced
-  Lucene index. Best for conceptual lookups. Fields: `content`, `path`, `filename`, `extension`.
-  Example: `content:UserService AND extension:kt`, `content:"jwt.verify" AND -path:node_modules`,
-  `content:initialise~1` (fuzzy).
+  Lucene index. Best for conceptual lookups. Fields: `content`, `path`, `filename`, `extension`,
+  `words`. Example: `content:UserService AND extension:kt`, `content:"jwt.verify" AND
+  -path:node_modules`, `content:initialise~1` (fuzzy). For "does X sit near Y" — real word-distance
+  proximity — use the `words` field instead of `content`: `words:"ConfigLoader DatabasePool"~10`
+  (matches within ~10 words either order; exact phrase drop the `~N`). `words` tokenizes each
+  identifier as exactly one term (no camelCase splitting like `content` does), so slop counts real
+  words apart — `content`'s proximity/phrase queries on multi-word identifiers are unreliable (its
+  word-splitting inflates position counts unpredictably) even though its plain term/fuzzy search
+  works fine. `words` is also useful on its own for an exact, unsplit identifier match with none of
+  `content`'s word-part noise.
 - `grep_code` — exact regex/literal search read directly from disk (never stale). Returns
   `file:line` with surrounding context. Use `outputMode: files_with_matches` or `count` for
   broader sweeps before drilling into content. Matches everywhere, including comments and strings.

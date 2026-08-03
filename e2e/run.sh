@@ -187,6 +187,13 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "search_code finds nothing in gitignored dir" "$text" "0 result(s)"
 
+echo "=== search_code: words field finds real word-distance proximity ==="
+call_tool "search_code" '{"query":"words:\"UserService login\"~5","limit":5}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "words proximity finds App.kt" "$text" "App.kt"
+assert_not_contains "words proximity is not a zero-result query" "$text" "Found 0 result(s)"
+
 echo "=== grep_code: literal + line number ==="
 call_tool "grep_code" '{"pattern":"fun login","literal":true}'
 advance_response_line

@@ -1,5 +1,7 @@
 package cz.loplex.lucenemcp
 
+import org.apache.lucene.analysis.Analyzer
+import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
 import org.apache.lucene.queryparser.classic.QueryParser
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -11,7 +13,8 @@ import java.io.File
 
 class IndexManagerTest {
 
-    private val analyzer = CodeAnalyzer()
+    // Mirrors production (Main.kt): "words" gets WordAnalyzer, every other field keeps CodeAnalyzer.
+    private val analyzer: Analyzer = PerFieldAnalyzerWrapper(CodeAnalyzer(), mapOf("words" to WordAnalyzer()))
     private val managersToClose = mutableListOf<IndexManager>()
     private val rootsToClean = mutableListOf<File>()
 
@@ -32,6 +35,11 @@ class IndexManagerTest {
 
     private fun hitCountFor(manager: IndexManager, query: String): Long {
         val parsed = QueryParser("content", analyzer).parse(query)
+        return manager.searcher.search(parsed, 10).totalHits.value
+    }
+
+    private fun hitCountForWords(manager: IndexManager, query: String): Long {
+        val parsed = QueryParser("words", analyzer).parse(query)
         return manager.searcher.search(parsed, 10).totalHits.value
     }
 
@@ -106,6 +114,42 @@ class IndexManagerTest {
         assertEquals(1L, hitCountFor(manager, "content:\"alpha beta\""))
         assertEquals(1L, hitCountFor(manager, "content:\"alpha gamma\"~2"))
         assertEquals(0L, hitCountFor(manager, "content:\"alpha gamma\""))
+    }
+
+    @Test
+    fun `words field finds two identifiers within proximity, unlike content on the same text`(@TempDir tempDir: File) {
+        // content's WordDelimiterGraphFilter splits ConfigLoader/DatabasePool into word parts on
+        // both the query and the document side independently, inflating position counts so the two
+        // sides never line back up — confirmed empirically to return zero hits even at slop 100 (see
+        // NOTES/AI/plan.md step 13). words uses WordAnalyzer instead: one identifier, one position.
+        File(tempDir, "a.kt").writeText(
+            """
+            class ConfigLoader {
+                fun load() {}
+            }
+
+            fun setup() {
+                val db = DatabasePool
+            }
+            """.trimIndent()
+        )
+        val manager = open(tempDir)
+        manager.sync()
+
+        assertEquals(0L, hitCountFor(manager, "content:\"ConfigLoader DatabasePool\"~100"))
+        assertEquals(1L, hitCountForWords(manager, "words:\"ConfigLoader DatabasePool\"~10"))
+        assertEquals(0L, hitCountForWords(manager, "words:\"ConfigLoader DatabasePool\"~3"))
+    }
+
+    @Test
+    fun `words field does not match a partial camelCase word part, unlike content`(@TempDir tempDir: File) {
+        File(tempDir, "a.kt").writeText("class ConfigLoader")
+        val manager = open(tempDir)
+        manager.sync()
+
+        assertEquals(1L, hitCountFor(manager, "content:Loader")) // content still splits camelCase
+        assertEquals(0L, hitCountForWords(manager, "words:Loader")) // words treats it as one term
+        assertEquals(1L, hitCountForWords(manager, "words:ConfigLoader"))
     }
 
     @Test

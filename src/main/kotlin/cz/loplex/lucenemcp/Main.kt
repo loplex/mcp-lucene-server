@@ -4,6 +4,8 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import org.apache.lucene.analysis.Analyzer
+import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
 import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.highlight.Highlighter
 import org.apache.lucene.search.highlight.QueryScorer
@@ -34,7 +36,9 @@ fun main(args: Array<String>) {
     }
 
     val gson = Gson()
-    val analyzer = CodeAnalyzer()
+    // "words" gets its own analyzer for real word-distance phrase/proximity queries (see
+    // WordAnalyzer's kdoc) — every other field, including the default "content", keeps CodeAnalyzer.
+    val analyzer: Analyzer = PerFieldAnalyzerWrapper(CodeAnalyzer(), mapOf("words" to WordAnalyzer()))
 
     System.err.println("Opening persistent index for: ${targetDir.absolutePath}")
     val indexManager = IndexManager(targetDir, analyzer)
@@ -222,7 +226,7 @@ fun handleToolCall(
     id: JsonElement,
     request: JsonObject,
     indexManager: IndexManager,
-    analyzer: CodeAnalyzer,
+    analyzer: Analyzer,
     root: File,
     watcherActive: Boolean
 ): JsonObject {
@@ -257,7 +261,7 @@ fun handleToolCall(
     return res
 }
 
-private fun handleSearchCode(arguments: JsonObject, indexManager: IndexManager, analyzer: CodeAnalyzer, watcherActive: Boolean): String {
+private fun handleSearchCode(arguments: JsonObject, indexManager: IndexManager, analyzer: Analyzer, watcherActive: Boolean): String {
     val queryStr = arguments.get("query")?.asString
     if (queryStr.isNullOrBlank()) return "Missing required argument: query"
     val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIMIT

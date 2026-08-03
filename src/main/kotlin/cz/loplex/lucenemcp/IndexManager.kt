@@ -1,5 +1,6 @@
 package cz.loplex.lucenemcp
 
+import org.apache.lucene.analysis.Analyzer
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field
 import org.apache.lucene.document.StoredField
@@ -24,7 +25,7 @@ data class SyncResult(val added: Int, val updated: Int, val deleted: Int) {
  * [sync] performs a cheap mtime-based diff (stat only, no re-read of unchanged files) so it is safe
  * to call before every search — search_code is never stale, and restarts skip a full rebuild.
  */
-class IndexManager(private val root: File, private val analyzer: CodeAnalyzer) {
+class IndexManager(private val root: File, private val analyzer: Analyzer) {
     private val indexDirectory = NIOFSDirectory(cacheIndexPath(root))
     private val writer = IndexWriter(indexDirectory, IndexWriterConfig(analyzer))
     private var reader: DirectoryReader
@@ -60,6 +61,10 @@ class IndexManager(private val root: File, private val analyzer: CodeAnalyzer) {
 
             val doc = Document()
             doc.add(TextField("content", content, Field.Store.YES))
+            // Same text, indexed via WordAnalyzer (see PerFieldAnalyzerWrapper in Main.kt) — one
+            // position slot per whole identifier, so words:"a b"~N proximity/phrase queries count
+            // real words apart instead of getting lost in content's camelCase-splitting positions.
+            doc.add(TextField("words", content, Field.Store.NO))
             doc.add(StringField("path", relativePath, Field.Store.YES))
             doc.add(StringField("filename", file.name, Field.Store.YES))
             doc.add(StringField("extension", file.extension, Field.Store.YES))

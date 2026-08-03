@@ -186,6 +186,16 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
     ))
 
     tools.add(tool(
+        name = "find_implementations",
+        description = "Finds types that directly extend/implement a given class/interface/trait name (e.g. who implements a Kotlin interface, who extends a Java class, who does 'impl Trait for Type' in Rust). Backed by the same tree-sitter parse tree as find_definition/find_references. Only direct subtypes in project source files, not transitive chains through an intermediate type and nothing inside dependencies. Go is not supported (its interfaces are satisfied structurally, with no extends/implements clause to search for). Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, rs.",
+        properties = linkedMapOf(
+            "type" to prop("string", "Exact base type/interface/trait name (identifier), e.g. 'Shape'."),
+            "maxMatches" to prop("number", "Maximum number of returned implementations (default $DEFAULT_GREP_LIMIT).")
+        ),
+        required = listOf("type")
+    ))
+
+    tools.add(tool(
         name = "outline",
         description = "Lists every symbol a file defines (class/interface/function/property/...) in source order, without reading the whole file — a quick structural overview before deciding what to read_file. Backed by the same tree-sitter parse tree as find_definition/find_references. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs.",
         properties = linkedMapOf(
@@ -253,6 +263,7 @@ fun handleToolCall(
             "list_files" -> handleListFiles(arguments, root)
             "find_definition" -> handleFindDefinition(arguments, root, astCache)
             "find_references" -> handleFindReferences(arguments, root, astCache)
+            "find_implementations" -> handleFindImplementations(arguments, root, astCache)
             "outline" -> handleOutline(arguments, root, astCache)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
@@ -366,6 +377,13 @@ private fun handleFindReferences(arguments: JsonObject, root: File, astCache: As
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
     return runFindReferences(root, symbol, maxMatches, astCache)
+}
+
+private fun handleFindImplementations(arguments: JsonObject, root: File, astCache: AstCache): String {
+    val type = arguments.get("type")?.asString
+    if (type.isNullOrBlank()) return "Missing required argument: type"
+    val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
+    return runFindImplementations(root, type, maxMatches, astCache)
 }
 
 private fun handleOutline(arguments: JsonObject, root: File, astCache: AstCache): String {

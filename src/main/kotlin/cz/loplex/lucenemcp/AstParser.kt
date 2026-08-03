@@ -90,6 +90,36 @@ fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: Strin
     return hits
 }
 
+/** One place in [parsed] where a type directly extends/implements [supertype] — see [ImplementsHit]. */
+data class ImplementsHit(val nameNode: TSNode, val kind: String)
+
+/**
+ * Runs every [ImplementsQuery] for [languageName] (see [IMPLEMENTS_BY_LANGUAGE]) against [parsed],
+ * keeping only clauses whose `@supertype` capture's text equals [supertype] — or every
+ * extends/implements clause, in document order, when [supertype] is null. [ImplementsHit.nameNode]
+ * is the *subtype's* name (the class/struct/interface doing the extending/implementing), not the
+ * supertype itself — `find_implementations` reports where each subtype is declared, not where the
+ * supertype is mentioned.
+ */
+fun implementsHitsInFile(parsed: ParsedFile, languageName: String, supertype: String? = null): List<ImplementsHit> {
+    val queries = IMPLEMENTS_BY_LANGUAGE[languageName] ?: return emptyList()
+    val hits = mutableListOf<ImplementsHit>()
+
+    for (implQuery in queries) {
+        val query = compiledQuery(languageName, implQuery.source) ?: continue
+        val cursor = TSQueryCursor()
+        cursor.exec(query, parsed.tree.rootNode)
+        val match = TSQueryMatch()
+        while (cursor.nextMatch(match)) {
+            val nameNode = match.captures.firstOrNull { query.getCaptureNameForId(it.index) == "name" }?.node ?: continue
+            val supertypeNode = match.captures.firstOrNull { query.getCaptureNameForId(it.index) == "supertype" }?.node ?: continue
+            if (supertype != null && parsed.textOf(supertypeNode) != supertype) continue
+            hits.add(ImplementsHit(nameNode, implQuery.kind))
+        }
+    }
+    return hits
+}
+
 private val PLAIN_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
 /**

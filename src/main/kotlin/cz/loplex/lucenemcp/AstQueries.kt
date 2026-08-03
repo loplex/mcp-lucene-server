@@ -93,6 +93,69 @@ private val RUST_DEFINITIONS = listOf(
     DefinitionQuery("type", """(type_item name: (type_identifier) @name) @definition.type""")
 )
 
+/**
+ * One tree-sitter query pattern identifying an `extends`/`implements`(-shaped) clause: [source]
+ * must end in a `@name` capture on the *subtype's* name and a `@supertype` capture on the
+ * base type/interface/trait it names. [kind] is "extends" (superclass/base-struct relation,
+ * inheritance) or "implements" (interface/trait satisfaction) — a semantic label, not always a
+ * literal keyword in the source (e.g. Rust's `impl Trait for Type` has no `implements` keyword).
+ */
+data class ImplementsQuery(val kind: String, val source: String)
+
+private val KOTLIN_IMPLEMENTS = listOf(
+    // `class Circle(r: Double) : Shape(r)` — superclass called via its constructor.
+    ImplementsQuery("extends", """(class_declaration (type_identifier) @name (delegation_specifier (constructor_invocation (user_type (type_identifier) @supertype)))) @implements"""),
+    // `class Circle(r: Double) : Shape(r), Drawable` — a plain, non-invoked user_type is an interface.
+    ImplementsQuery("implements", """(class_declaration (type_identifier) @name (delegation_specifier (user_type (type_identifier) @supertype))) @implements""")
+)
+
+private val JAVA_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class_declaration name: (identifier) @name superclass: (superclass (type_identifier) @supertype)) @implements"""),
+    ImplementsQuery("implements", """(class_declaration name: (identifier) @name interfaces: (super_interfaces (type_list (type_identifier) @supertype))) @implements""")
+)
+
+private val TYPESCRIPT_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class_declaration name: (type_identifier) @name (class_heritage (extends_clause value: (identifier) @supertype))) @implements"""),
+    ImplementsQuery("implements", """(class_declaration name: (type_identifier) @name (class_heritage (implements_clause (type_identifier) @supertype))) @implements""")
+)
+
+private val JAVASCRIPT_IMPLEMENTS = listOf(
+    // JS has no `implements` clause (no interfaces as a language construct) and, unlike TS, its
+    // `class_heritage` holds the superclass name directly — no `extends_clause` wrapper node.
+    ImplementsQuery("extends", """(class_declaration name: (identifier) @name (class_heritage (identifier) @supertype)) @implements""")
+)
+
+private val PYTHON_IMPLEMENTS = listOf(
+    // `class Circle(Shape, Drawable):` — multiple inheritance, no extends/implements distinction.
+    ImplementsQuery("extends", """(class_definition name: (identifier) @name superclasses: (argument_list (identifier) @supertype)) @implements""")
+)
+
+private val RUST_IMPLEMENTS = listOf(
+    // `impl Shape for Circle` — an inherent `impl Circle { ... }` has no `trait:` field and is
+    // correctly excluded (it isn't implementing anything).
+    ImplementsQuery("implements", """(impl_item trait: (type_identifier) @supertype type: (type_identifier) @name) @implements""")
+)
+
+/**
+ * Per-language `extends`/`implements`(-shaped) clause queries, used by `find_implementations` to
+ * find direct subtypes of a given base type/interface/trait name — see [ImplementsQuery]. Go is
+ * intentionally absent: its interfaces are satisfied structurally (duck typing) with no
+ * extends/implements-shaped clause in the grammar connecting an implementing struct to the
+ * interface it satisfies — a real type/method-set check would be needed, not an AST query
+ * (confirmed by spike: a struct with a matching method set and an unrelated interface declaration
+ * share zero syntactic structure). `ide_find_implementations`-equivalent IDE tooling has the same
+ * gap for Go.
+ */
+val IMPLEMENTS_BY_LANGUAGE: Map<String, List<ImplementsQuery>> = mapOf(
+    "kotlin" to KOTLIN_IMPLEMENTS,
+    "java" to JAVA_IMPLEMENTS,
+    "typescript" to TYPESCRIPT_IMPLEMENTS,
+    "tsx" to TYPESCRIPT_IMPLEMENTS,
+    "javascript" to JAVASCRIPT_IMPLEMENTS,
+    "python" to PYTHON_IMPLEMENTS,
+    "rust" to RUST_IMPLEMENTS
+)
+
 val DEFINITIONS_BY_LANGUAGE: Map<String, List<DefinitionQuery>> = mapOf(
     "kotlin" to KOTLIN_DEFINITIONS,
     "java" to JAVA_DEFINITIONS,

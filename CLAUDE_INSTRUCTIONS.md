@@ -1,7 +1,7 @@
 # INSTRUCTIONS FOR CLAUDE (MCP Lucene Integration)
 
 You are equipped with a code-search MCP server backed by Apache Lucene and tree-sitter, meant to
-replace the built-in Grep/Glob/Read tools for this project. It exposes eight tools:
+replace the built-in Grep/Glob/Read tools for this project. It exposes nine tools:
 
 - `search_code` — analyzed/fuzzy fulltext search (word-form aware) over a persistent, auto-synced
   Lucene index. Best for conceptual lookups. Fields: `content`, `path`, `filename`, `extension`,
@@ -32,6 +32,13 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes eight too
   be resolved on disk still fall back to the name-mention check. Still not a full type-resolving scope
   resolver, so two same-named symbols that are otherwise both importable/visible aren't distinguished.
   Same supported extensions as `find_definition`.
+- `find_implementations` — finds types that directly `extends`/`implements` a given class/
+  interface/trait name (a Kotlin interface implementer, a Java subclass, a Rust `impl Trait for
+  Type`, ...). Same tree-sitter basis as `find_definition`/`find_references`. Only direct subtypes
+  in project source files — no transitive chain through an intermediate type, nothing inside a
+  dependency. Go is not supported — its interfaces are satisfied structurally (duck typing), with
+  no extends/implements clause to search for. Supported extensions: kt, kts, java, ts, tsx, js,
+  jsx, mjs, py, rs.
 - `read_file` — read a file, optionally restricted to a line range, to jump to an exact location
   found by `search_code`/`grep_code`/`find_definition`/`find_references` without re-requesting the
   whole file.
@@ -47,10 +54,11 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes eight too
 1. Know the exact string/regex (function name, error message, import) → `grep_code`.
 2. Need the declaration site of a symbol, not every mention → `find_definition`.
 3. Need every real call/usage site of a symbol, excluding comments/strings → `find_references`.
-4. Fuzzy/conceptual query, word-form variations, or want ranked relevance → `search_code`.
-5. Need to enumerate files by name/extension → `list_files`.
-6. Have a `file:line` hit and need the surrounding code → `read_file` with a line range.
-7. Need a quick structural overview of one file (its classes/functions/properties) before deciding
+4. Need who extends/implements a class/interface/trait → `find_implementations`.
+5. Fuzzy/conceptual query, word-form variations, or want ranked relevance → `search_code`.
+6. Need to enumerate files by name/extension → `list_files`.
+7. Have a `file:line` hit and need the surrounding code → `read_file` with a line range.
+8. Need a quick structural overview of one file (its classes/functions/properties) before deciding
    what to read → `outline`.
 
 ## Goal

@@ -63,6 +63,8 @@ setup_fixture() {
     printf 'export class Widget {}\n' > "$FIXTURE_DIR/src/widget.ts"
     printf 'export class Unrelated {}\n' > "$FIXTURE_DIR/src/other.ts"
     printf "import { Widget } from './other';\nfunction run() { new Widget(); }\n" > "$FIXTURE_DIR/src/consumer.ts"
+
+    printf 'interface Drawable\nabstract class Shape(val r: Double)\nclass Circle(r: Double) : Shape(r), Drawable\n' > "$FIXTURE_DIR/src/shapes.kt"
 }
 
 start_server() {
@@ -170,14 +172,15 @@ send "tools/list" '{}'
 advance_response_line
 line=$(fetch_raw "$RESPONSE_LINE")
 tool_names=$(echo "$line" | jq -r '.result.tools[].name' | sort | tr '\n' ' ')
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "find_definition"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "find_references"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "grep_code"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "list_files"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "outline"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "read_file"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "reindex_code"
-assert_contains "tools/list exposes all 8 tools" "$tool_names" "search_code"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "find_definition"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "find_implementations"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "find_references"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "grep_code"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "list_files"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "outline"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "read_file"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "reindex_code"
+assert_contains "tools/list exposes all 9 tools" "$tool_names" "search_code"
 
 echo "=== search_code ==="
 call_tool "search_code" '{"query":"content:UserService","limit":5}'
@@ -250,6 +253,23 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "list_files finds App.kt" "$text" "src/App.kt"
 assert_not_contains "list_files excludes README.md for *.kt filter" "$text" "README.md"
+
+echo "=== find_implementations: distinguishes extends (superclass) from implements (interface) ==="
+call_tool "find_implementations" '{"type":"Shape"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_implementations tags the superclass relation" "$text" "src/shapes.kt:3 [extends]"
+
+call_tool "find_implementations" '{"type":"Drawable"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_implementations tags the interface relation" "$text" "src/shapes.kt:3 [implements]"
+
+echo "=== find_implementations: unknown type reports no implementations ==="
+call_tool "find_implementations" '{"type":"TotallyUnknownSymbolZZZ"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_implementations reports absence cleanly" "$text" "No implementations"
 
 echo "=== outline: lists a file's symbols in source order ==="
 call_tool "outline" '{"path":"src/App.kt"}'

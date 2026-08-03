@@ -106,9 +106,15 @@ class IndexManager(private val root: File, private val analyzer: CodeAnalyzer) {
         }
         return result
     }
+
+    fun close() {
+        reader.close()
+        writer.close()
+        indexDirectory.close()
+    }
 }
 
-private fun cacheIndexPath(root: File): java.nio.file.Path {
+fun cacheIndexPath(root: File): java.nio.file.Path {
     val canonical = root.canonicalFile.path
     val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray())
     val hash = digest.joinToString("") { "%02x".format(it) }.take(16)

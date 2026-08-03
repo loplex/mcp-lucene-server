@@ -133,16 +133,20 @@ fun globToRegex(glob: String): Regex {
     var i = 0
     while (i < glob.length) {
         val c = glob[i]
-        when (c) {
-            '*' -> {
-                if (i + 1 < glob.length && glob[i + 1] == '*') {
-                    sb.append(".*")
-                    i++
-                } else {
-                    sb.append("[^/]*")
-                }
+        when {
+            c == '*' && glob.getOrNull(i + 1) == '*' && glob.getOrNull(i + 2) == '/' -> {
+                // "**/" also matches zero intermediate directories, e.g. "src/**/*.kt" ~ "src/Main.kt".
+                sb.append("(?:.*/)?")
+                i += 3
+                continue
             }
-            '?' -> sb.append("[^/]")
+            c == '*' && glob.getOrNull(i + 1) == '*' -> {
+                sb.append(".*")
+                i += 2
+                continue
+            }
+            c == '*' -> sb.append("[^/]*")
+            c == '?' -> sb.append("[^/]")
             else -> sb.append(Regex.escape(c.toString()))
         }
         i++

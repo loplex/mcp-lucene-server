@@ -12,6 +12,9 @@ private val IGNORED_DIR_NAMES = setOf(
     "node_modules", "target", "build", "dist", "out", "__pycache__"
 )
 
+/** Whether a directory with this (simple, not path) name should be skipped by fallback discovery and the file watcher. */
+fun isIgnoredDirName(name: String): Boolean = name in IGNORED_DIR_NAMES
+
 const val MAX_INDEXABLE_FILE_BYTES = 2_000_000L
 
 /**

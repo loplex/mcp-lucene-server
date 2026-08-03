@@ -241,6 +241,9 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "reindex_code reports a summary" "$text" "Reindex complete"
 
+echo "=== file watcher started successfully ==="
+assert_contains "stderr confirms the background file watcher is active" "$(cat "$ERR_FILE")" "File watcher active"
+
 echo "=== freshness: search_code picks up an edit made after the process started ==="
 call_tool "search_code" '{"query":"content:BrandNewMarkerZZZ","limit":5}'
 advance_response_line
@@ -249,10 +252,18 @@ assert_contains "marker absent before the edit" "$text" "0 result(s)"
 
 echo "// BrandNewMarkerZZZ" >> "$FIXTURE_DIR/src/App.kt"
 
-call_tool "search_code" '{"query":"content:BrandNewMarkerZZZ","limit":5}'
-advance_response_line
-text=$(fetch_text "$RESPONSE_LINE")
-assert_contains "marker present after the edit, same running process" "$text" "BrandNewMarkerZZZ"
+# The index is now kept fresh by a background file watcher (debounced), not by a
+# synchronous diff inside search_code, so the edit above lands asynchronously.
+# Poll instead of asserting on a single immediate call.
+text=""
+for _ in $(seq 1 30); do
+    call_tool "search_code" '{"query":"content:BrandNewMarkerZZZ","limit":5}'
+    advance_response_line
+    text=$(fetch_text "$RESPONSE_LINE")
+    [[ "$text" == *"BrandNewMarkerZZZ"* ]] && break
+    sleep 0.1
+done
+assert_contains "marker present after the edit, picked up by background watcher" "$text" "BrandNewMarkerZZZ"
 
 echo "=== unknown tool name is a clean JSON-RPC error ==="
 send "tools/call" '{"name":"does_not_exist","arguments":{}}'

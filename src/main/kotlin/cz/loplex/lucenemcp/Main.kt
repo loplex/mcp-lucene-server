@@ -41,6 +41,19 @@ fun main(args: Array<String>) {
     val initialSync = indexManager.sync()
     System.err.println("Initial sync: +${initialSync.added} ~${initialSync.updated} -${initialSync.deleted}")
 
+    val indexWatcher = IndexWatcher(targetDir, indexManager)
+    val watcherStarted = indexWatcher.start()
+    if (watcherStarted) {
+        System.err.println("File watcher active: index stays in sync in the background.")
+    } else {
+        System.err.println("File watcher unavailable: search_code will sync on every call instead.")
+    }
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        indexWatcher.close()
+        indexManager.close()
+    })
+
     val scanner = Scanner(System.`in`)
     System.err.println("MCP Lucene Server listening on stdin...")
 
@@ -67,7 +80,7 @@ fun main(args: Array<String>) {
             val response = when (method) {
                 "initialize" -> createInitResponse(id)
                 "tools/list" -> createToolsListResponse(id)
-                "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir)
+                "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir, watcherStarted)
                 else -> createErrorResponse(id, -32601, "Method not found: $method")
             }
 
@@ -101,7 +114,7 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
 
     tools.add(tool(
         name = "search_code",
-        description = "Analyzed fulltext search over the codebase using Apache Lucene syntax (best for conceptual/fuzzy queries). Supports fields: content, path, filename, extension. Example: content:UserService AND extension:kt. The index is automatically incrementally synced with the filesystem before every call.",
+        description = "Analyzed fulltext search over the codebase using Apache Lucene syntax (best for conceptual/fuzzy queries). Supports fields: content, path, filename, extension. Example: content:UserService AND extension:kt. The index is kept fresh in the background by a file watcher (or synced before every call if the watcher isn't available).",
         properties = linkedMapOf(
             "query" to prop("string", "Lucene search query (default field: content)."),
             "limit" to prop("number", "Maximum number of results (default $DEFAULT_LIMIT).")
@@ -149,7 +162,7 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
 
     tools.add(tool(
         name = "reindex_code",
-        description = "Explicitly runs an incremental sync of the Lucene index (search_code) with the filesystem and returns the number of added/updated/deleted documents. search_code already does this automatically; this tool is only for explicit verification.",
+        description = "Explicitly runs an incremental sync of the Lucene index (search_code) with the filesystem and returns the number of added/updated/deleted documents. The index is normally kept fresh in the background by a file watcher; this tool is for forced verification or in case the watcher missed something (e.g. the OS watched-directory limit was hit).",
         properties = linkedMapOf(),
         required = emptyList()
     ))
@@ -190,7 +203,8 @@ fun handleToolCall(
     request: JsonObject,
     indexManager: IndexManager,
     analyzer: CodeAnalyzer,
-    root: File
+    root: File,
+    watcherActive: Boolean
 ): JsonObject {
     val params = request.getAsJsonObject("params")
     val toolName = params?.get("name")?.asString
@@ -198,7 +212,7 @@ fun handleToolCall(
 
     val text = try {
         when (toolName) {
-            "search_code" -> handleSearchCode(arguments, indexManager, analyzer)
+            "search_code" -> handleSearchCode(arguments, indexManager, analyzer, watcherActive)
             "grep_code" -> handleGrepCode(arguments, root)
             "read_file" -> handleReadFile(arguments, root)
             "list_files" -> handleListFiles(arguments, root)
@@ -221,12 +235,12 @@ fun handleToolCall(
     return res
 }
 
-private fun handleSearchCode(arguments: JsonObject, indexManager: IndexManager, analyzer: CodeAnalyzer): String {
+private fun handleSearchCode(arguments: JsonObject, indexManager: IndexManager, analyzer: CodeAnalyzer, watcherActive: Boolean): String {
     val queryStr = arguments.get("query")?.asString
     if (queryStr.isNullOrBlank()) return "Missing required argument: query"
     val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIMIT
 
-    indexManager.sync()
+    if (!watcherActive) indexManager.sync()
     val searcher = indexManager.searcher
 
     return try {

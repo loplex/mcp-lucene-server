@@ -159,3 +159,84 @@ fun classifyReferenceKind(node: TSNode, rules: ReferenceRules): String {
     }
     return "reference"
 }
+
+/**
+ * True if [node] sits on the qualified/selector side of a member access (`receiver.node`), and is
+ * therefore resolved by the receiver's own type, not by [node]'s file's imports or package — import-
+ * aware candidate filtering (see [ImportInfo]/`isCandidateFile` in `FindReferencesTool.kt`) must never
+ * drop these. Go/TS/JS/Rust already flag this via a dedicated node type ([ReferenceRules.memberNodeTypes]),
+ * so [classifyReferenceKind] returning "member" is enough for them. Kotlin/Java/Python reuse the very
+ * same identifier node type for both the qualified and the bare position, so this checks the parent's
+ * shape directly for those three instead.
+ */
+fun isQualifiedAccess(node: TSNode, languageName: String): Boolean {
+    val parent = node.parent ?: return false
+    if (parent.isNull) return false
+    return when (languageName) {
+        "kotlin" -> parent.type == "navigation_suffix"
+        "java" -> when (parent.type) {
+            "field_access" -> fieldIs(parent, "field", node)
+            "method_invocation" -> fieldIs(parent, "name", node) && parent.getChildByFieldName("object")?.isNull == false
+            else -> false
+        }
+        "python" -> parent.type == "attribute" && fieldIs(parent, "attribute", node)
+        else -> false
+    }
+}
+
+private fun fieldIs(parent: TSNode, fieldName: String, node: TSNode): Boolean {
+    val field = parent.getChildByFieldName(fieldName) ?: return false
+    return !field.isNull && field.startByte == node.startByte && field.endByte == node.endByte
+}
+
+/**
+ * A file's package/module declaration and imports, cheap to extract and used to narrow
+ * `find_references` candidates — see [IMPORT_QUERIES_BY_LANGUAGE] and `extractImportInfo` in
+ * `AstParser.kt`. [packageName] is `""` for files with no package declaration (Kotlin/Java's
+ * "default package") or for languages without this concept — comparisons only happen for
+ * [ImportQueryConfig.packageAware] languages, so the sentinel is never compared across languages.
+ * [importedNames] is every identifier-shaped leaf found inside an import/use statement (path
+ * segments and aliases alike) — a cheap over-approximation, not a resolved symbol table: it also
+ * catches Go's bare single-segment import string (`import "fmt"` behaves like a local name), which
+ * happens to be exactly the name Go code qualifies with.
+ */
+data class ImportInfo(val packageName: String, val importedNames: Set<String>, val hasWildcardImport: Boolean)
+
+/**
+ * Where to find, in a language's grammar, the package/module declaration ([packageQuery], capturing
+ * `@package` on the whole statement — the leading keyword is stripped textually) and import
+ * statements ([importQuery], capturing `@import` once per statement). [wildcardNodeTypes] are node
+ * types that, found anywhere inside an `@import` capture, mean "brings names into scope unqualified,
+ * with no way to tell which ones from the statement's text alone" (Go's dot-import counts as this
+ * language's wildcard form, hence the lone `"dot"` type instead of a `*`-shaped node).
+ */
+data class ImportQueryConfig(val packageQuery: String?, val importQuery: String, val wildcardNodeTypes: Set<String>) {
+    val packageAware: Boolean get() = packageQuery != null
+}
+
+val IMPORT_QUERIES_BY_LANGUAGE: Map<String, ImportQueryConfig> = mapOf(
+    "kotlin" to ImportQueryConfig(
+        packageQuery = "(package_header) @package",
+        importQuery = "(import_header) @import",
+        wildcardNodeTypes = setOf("wildcard_import")
+    ),
+    "java" to ImportQueryConfig(
+        packageQuery = "(package_declaration) @package",
+        importQuery = "(import_declaration) @import",
+        wildcardNodeTypes = setOf("asterisk")
+    ),
+    "typescript" to ImportQueryConfig(null, "(import_statement) @import", emptySet()),
+    "tsx" to ImportQueryConfig(null, "(import_statement) @import", emptySet()),
+    "javascript" to ImportQueryConfig(null, "(import_statement) @import", emptySet()),
+    "python" to ImportQueryConfig(
+        packageQuery = null,
+        importQuery = "(import_statement) @import (import_from_statement) @import",
+        wildcardNodeTypes = setOf("wildcard_import")
+    ),
+    "go" to ImportQueryConfig(
+        packageQuery = "(package_clause) @package",
+        importQuery = "(import_spec) @import",
+        wildcardNodeTypes = setOf("dot")
+    ),
+    "rust" to ImportQueryConfig(null, "(use_declaration) @import", setOf("use_wildcard"))
+)

@@ -55,6 +55,8 @@ setup_fixture() {
     mkdir -p "$FIXTURE_DIR/src" "$FIXTURE_DIR/ignored"
     printf 'ignored/\n' > "$FIXTURE_DIR/.gitignore"
     printf 'class UserService {\n    fun login() {}\n}\n\n// UserService mentioned only in a comment here, not a real reference\nfun caller() {\n    val s = UserService()\n    s.login()\n}\n' > "$FIXTURE_DIR/src/App.kt"
+    printf 'package pkg.other\n\nfun other(login: Int) {\n    println(login)\n}\n' > "$FIXTURE_DIR/src/Unrelated.kt"
+    printf 'package pkg.other\n\nimport UserService.login\n\nfun run2() {\n    login()\n}\n' > "$FIXTURE_DIR/src/Caller.kt"
     printf 'TODO: refactor UserService\n' > "$FIXTURE_DIR/README.md"
     printf 'should never be indexed or grepped\n' > "$FIXTURE_DIR/ignored/vendor.js"
 }
@@ -256,9 +258,10 @@ echo "=== find_references: finds the definition and the real call site, not the 
 call_tool "find_references" '{"symbol":"UserService"}'
 advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
-assert_contains "find_references reports exactly definition + call (not the comment mention)" "$text" "Found 2 reference(s)"
+assert_contains "find_references reports definition + call + the Caller.kt import (not the comment mention)" "$text" "Found 3 reference(s)"
 assert_contains "find_references tags the declaration" "$text" "src/App.kt:1 [definition]"
 assert_contains "find_references tags the constructor call" "$text" "src/App.kt:7 [call]"
+assert_contains "find_references tags the Caller.kt import" "$text" "src/Caller.kt:3 [import]"
 assert_not_contains "find_references skips the README mention" "$text" "README.md"
 
 echo "=== find_references: finds a method call site ==="
@@ -267,6 +270,13 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "find_references tags the method declaration" "$text" "src/App.kt:2 [definition]"
 assert_contains "find_references tags the method call" "$text" "src/App.kt:8 [call]"
+
+echo "=== find_references: import-aware filtering narrows bare references to plausible files ==="
+call_tool "find_references" '{"symbol":"login"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_not_contains "find_references drops the unrelated same-named parameter (different package, no import)" "$text" "Unrelated.kt"
+assert_contains "find_references keeps the import-connected call site" "$text" "src/Caller.kt:6 [call]"
 
 echo "=== find_references: unknown symbol reports no references ==="
 call_tool "find_references" '{"symbol":"TotallyUnknownSymbolZZZ"}'

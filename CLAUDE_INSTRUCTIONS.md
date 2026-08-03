@@ -16,8 +16,11 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes seven too
   java, ts, tsx, js, jsx, mjs, py, go, rs.
 - `find_references` — finds real-code usages of a symbol (calls, type references, member access,
   imports), tagged with a cheap `[kind]` (`call`/`type`/`member`/`import`/`definition`/`reference`).
-  Same AST basis as `find_definition`; not a scope/import-aware resolver, so same-named symbols in
-  unrelated scopes aren't distinguished. Same supported extensions as `find_definition`.
+  Same AST basis as `find_definition`. Bare (unqualified) hits are narrowed by import/package
+  awareness — a file with no import and no shared package as any real definition is skipped for
+  those; qualified `receiver.symbol` access is never filtered this way. Still not a full
+  type-resolving scope resolver, so two same-named symbols that are otherwise both importable/visible
+  aren't distinguished. Same supported extensions as `find_definition`.
 - `read_file` — read a file, optionally restricted to a line range, to jump to an exact location
   found by `search_code`/`grep_code`/`find_definition`/`find_references` without re-requesting the
   whole file.

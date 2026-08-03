@@ -93,6 +93,117 @@ class FindReferencesToolTest {
     }
 
     @Test
+    fun `bare reference in an unrelated, unimported, different-package file is filtered out`(@TempDir tempDir: File) {
+        File(tempDir, "Def.kt").writeText(
+            """
+            package pkg.a
+
+            fun helper() {}
+            """.trimIndent()
+        )
+        File(tempDir, "Unrelated.kt").writeText(
+            """
+            package pkg.b
+
+            fun other(helper: Int) {
+                println(helper)
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "helper", 50)
+        assertTrue(result.contains("Def.kt:3 [definition]"))
+        assertFalse(result.contains("Unrelated.kt"))
+    }
+
+    @Test
+    fun `bare reference is kept when the file imports the symbol by name`(@TempDir tempDir: File) {
+        File(tempDir, "Def.kt").writeText(
+            """
+            package pkg.a
+
+            fun helper() {}
+            """.trimIndent()
+        )
+        File(tempDir, "Caller.kt").writeText(
+            """
+            package pkg.c
+
+            import pkg.a.helper
+
+            fun run() {
+                helper()
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "helper", 50)
+        assertTrue(result.contains("Caller.kt:6 [call]"))
+    }
+
+    @Test
+    fun `bare reference is kept when the file shares the defining package, no import needed`(@TempDir tempDir: File) {
+        File(tempDir, "Def.kt").writeText(
+            """
+            package pkg.a
+
+            fun helper() {}
+            """.trimIndent()
+        )
+        File(tempDir, "SamePackage.kt").writeText(
+            """
+            package pkg.a
+
+            fun run() {
+                helper()
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "helper", 50)
+        assertTrue(result.contains("SamePackage.kt:4 [call]"))
+    }
+
+    @Test
+    fun `qualified member-style access is never filtered out, even in an unrelated package`(@TempDir tempDir: File) {
+        File(tempDir, "Def.kt").writeText(
+            """
+            package pkg.a
+
+            fun helper() {}
+            """.trimIndent()
+        )
+        File(tempDir, "Unrelated.kt").writeText(
+            """
+            package pkg.b
+
+            fun run(receiver: Any) {
+                receiver.helper()
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "helper", 50)
+        assertTrue(result.contains("Unrelated.kt:4"))
+    }
+
+    @Test
+    fun `without any repo definition, filtering is disabled so external symbols still surface`(@TempDir tempDir: File) {
+        File(tempDir, "A.kt").writeText(
+            """
+            package pkg.a
+
+            fun run() {
+                println("hi")
+            }
+            """.trimIndent()
+        )
+
+        val result = runFindReferences(tempDir, "println", 50)
+        assertTrue(result.contains("A.kt") && result.contains("[call]"))
+    }
+
+    @Test
     fun `maxMatches caps the number of returned references`(@TempDir tempDir: File) {
         val sb = StringBuilder("fun helper() {}\n")
         repeat(5) { sb.append("val x = helper()\n") }

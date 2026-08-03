@@ -88,6 +88,69 @@ fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: Strin
     return hits
 }
 
+private val PLAIN_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
+
+/**
+ * Extracts [ImportInfo] for [parsed] using [languageName]'s [ImportQueryConfig] (see
+ * [IMPORT_QUERIES_BY_LANGUAGE]). Returns an empty/permissive [ImportInfo] for languages without a
+ * config — callers must treat that as "nothing known", never as "imports nothing".
+ */
+fun extractImportInfo(parsed: ParsedFile, languageName: String): ImportInfo {
+    val config = IMPORT_QUERIES_BY_LANGUAGE[languageName]
+        ?: return ImportInfo(packageName = "", importedNames = emptySet(), hasWildcardImport = false)
+
+    var packageName = ""
+    val packageQuery = config.packageQuery
+    if (packageQuery != null) {
+        compiledQuery(languageName, packageQuery)?.let { query ->
+            val cursor = TSQueryCursor()
+            cursor.exec(query, parsed.tree.rootNode)
+            val match = TSQueryMatch()
+            if (cursor.nextMatch(match)) {
+                val node = match.captures.firstOrNull { query.getCaptureNameForId(it.index) == "package" }?.node
+                if (node != null) {
+                    packageName = parsed.textOf(node).removePrefix("package").trim().removeSuffix(";").trim()
+                }
+            }
+        }
+    }
+
+    val importedNames = mutableSetOf<String>()
+    var hasWildcardImport = false
+    compiledQuery(languageName, config.importQuery)?.let { query ->
+        val cursor = TSQueryCursor()
+        cursor.exec(query, parsed.tree.rootNode)
+        val match = TSQueryMatch()
+        while (cursor.nextMatch(match)) {
+            val importNode = match.captures.firstOrNull { query.getCaptureNameForId(it.index) == "import" }?.node ?: continue
+            collectPlainIdentifierLeaves(importNode, parsed, importedNames)
+            if (containsNodeType(importNode, config.wildcardNodeTypes)) hasWildcardImport = true
+        }
+    }
+
+    return ImportInfo(packageName, importedNames, hasWildcardImport)
+}
+
+private fun collectPlainIdentifierLeaves(node: TSNode, parsed: ParsedFile, into: MutableSet<String>) {
+    if (node.childCount == 0) {
+        val text = parsed.textOf(node)
+        if (PLAIN_IDENTIFIER.matches(text)) into.add(text)
+        return
+    }
+    for (i in 0 until node.childCount) {
+        collectPlainIdentifierLeaves(node.getChild(i), parsed, into)
+    }
+}
+
+private fun containsNodeType(node: TSNode, types: Set<String>): Boolean {
+    if (types.isEmpty()) return false
+    if (types.contains(node.type)) return true
+    for (i in 0 until node.childCount) {
+        if (containsNodeType(node.getChild(i), types)) return true
+    }
+    return false
+}
+
 /** Compiled-query cache, keyed by (language name, query source) — one-time compile cost per process. */
 private val queryCache = HashMap<Pair<String, String>, TSQuery?>()
 

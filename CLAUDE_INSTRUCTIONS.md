@@ -1,7 +1,7 @@
 # INSTRUCTIONS FOR CLAUDE (MCP Lucene Integration)
 
 You are equipped with a code-search MCP server backed by Apache Lucene and tree-sitter, meant to
-replace the built-in Grep/Glob/Read tools for this project. It exposes seven tools:
+replace the built-in Grep/Glob/Read tools for this project. It exposes eight tools:
 
 - `search_code` — analyzed/fuzzy fulltext search (word-form aware) over a persistent, auto-synced
   Lucene index. Best for conceptual lookups. Fields: `content`, `path`, `filename`, `extension`,
@@ -35,6 +35,10 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes seven too
 - `read_file` — read a file, optionally restricted to a line range, to jump to an exact location
   found by `search_code`/`grep_code`/`find_definition`/`find_references` without re-requesting the
   whole file.
+- `outline` — lists every symbol a file defines (class/interface/function/property/...), in source
+  order, without reading the whole file. Same tree-sitter basis as `find_definition`/
+  `find_references`. Nested members (e.g. a class's methods) are included alongside top-level
+  declarations. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs.
 - `list_files` — list project files by glob pattern (respects `.gitignore`).
 - `reindex_code` — force an incremental resync of the `search_code` index (rarely needed —
   `search_code` already resyncs automatically before every call).
@@ -46,6 +50,8 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes seven too
 4. Fuzzy/conceptual query, word-form variations, or want ranked relevance → `search_code`.
 5. Need to enumerate files by name/extension → `list_files`.
 6. Have a `file:line` hit and need the surrounding code → `read_file` with a line range.
+7. Need a quick structural overview of one file (its classes/functions/properties) before deciding
+   what to read → `outline`.
 
 ## Goal
 Keep your active session memory minimal. Run a targeted query first, retrieve only the relevant

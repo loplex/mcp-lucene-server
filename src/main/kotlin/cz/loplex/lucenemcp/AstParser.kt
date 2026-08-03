@@ -59,12 +59,14 @@ data class DefinitionHit(val range: LongRange, val kind: String, val nameNode: T
 
 /**
  * Runs every [DefinitionQuery] for [languageName] (see [DEFINITIONS_BY_LANGUAGE]) against
- * [parsed], keeping only name nodes whose text equals [symbol]. Shared by `find_definition`
- * (which reports these directly) and `find_references` (which uses the resulting ranges to
- * label/exclude the declaration among plain usages) — see `AstQueries.kt` for how a definition's
- * [DefinitionQuery.priority] resolves grammars that reuse one node type for several kinds.
+ * [parsed], keeping only name nodes whose text equals [symbol] — or every definition, in document
+ * order, when [symbol] is null (used by `outline` to list a file's whole structure). Shared by
+ * `find_definition` (which reports these directly) and `find_references` (which uses the resulting
+ * ranges to label/exclude the declaration among plain usages) — see `AstQueries.kt` for how a
+ * definition's [DefinitionQuery.priority] resolves grammars that reuse one node type for several
+ * kinds.
  */
-fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: String): List<DefinitionHit> {
+fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: String? = null): List<DefinitionHit> {
     val queries = DEFINITIONS_BY_LANGUAGE[languageName] ?: return emptyList()
     val claimedRanges = HashSet<LongRange>()
     val hits = mutableListOf<DefinitionHit>()
@@ -78,7 +80,7 @@ fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: Strin
             val nameNode = match.captures
                 .firstOrNull { query.getCaptureNameForId(it.index) == "name" }
                 ?.node ?: continue
-            if (parsed.textOf(nameNode) != symbol) continue
+            if (symbol != null && parsed.textOf(nameNode) != symbol) continue
 
             val range = nameNode.startByte.toLong()..nameNode.endByte.toLong()
             if (!claimedRanges.add(range)) continue // already claimed by a higher-priority pattern

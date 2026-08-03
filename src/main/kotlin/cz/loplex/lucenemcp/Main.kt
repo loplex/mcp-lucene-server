@@ -186,6 +186,15 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
     ))
 
     tools.add(tool(
+        name = "outline",
+        description = "Lists every symbol a file defines (class/interface/function/property/...) in source order, without reading the whole file — a quick structural overview before deciding what to read_file. Backed by the same tree-sitter parse tree as find_definition/find_references. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs.",
+        properties = linkedMapOf(
+            "path" to prop("string", "Path to the file, relative to the project root.")
+        ),
+        required = listOf("path")
+    ))
+
+    tools.add(tool(
         name = "reindex_code",
         description = "Explicitly runs an incremental sync of the Lucene index (search_code) with the filesystem and returns the number of added/updated/deleted documents. The index is normally kept fresh in the background by a file watcher; this tool is for forced verification or in case the watcher missed something (e.g. the OS watched-directory limit was hit).",
         properties = linkedMapOf(),
@@ -244,6 +253,7 @@ fun handleToolCall(
             "list_files" -> handleListFiles(arguments, root)
             "find_definition" -> handleFindDefinition(arguments, root, astCache)
             "find_references" -> handleFindReferences(arguments, root, astCache)
+            "outline" -> handleOutline(arguments, root, astCache)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -356,6 +366,12 @@ private fun handleFindReferences(arguments: JsonObject, root: File, astCache: As
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
     return runFindReferences(root, symbol, maxMatches, astCache)
+}
+
+private fun handleOutline(arguments: JsonObject, root: File, astCache: AstCache): String {
+    val path = arguments.get("path")?.asString
+    if (path.isNullOrBlank()) return "Missing required argument: path"
+    return runOutline(root, path, astCache)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

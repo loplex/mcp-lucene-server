@@ -170,13 +170,14 @@ send "tools/list" '{}'
 advance_response_line
 line=$(fetch_raw "$RESPONSE_LINE")
 tool_names=$(echo "$line" | jq -r '.result.tools[].name' | sort | tr '\n' ' ')
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "find_definition"
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "find_references"
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "grep_code"
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "list_files"
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "read_file"
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "reindex_code"
-assert_contains "tools/list exposes all 7 tools" "$tool_names" "search_code"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "find_definition"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "find_references"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "grep_code"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "list_files"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "outline"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "read_file"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "reindex_code"
+assert_contains "tools/list exposes all 8 tools" "$tool_names" "search_code"
 
 echo "=== search_code ==="
 call_tool "search_code" '{"query":"content:UserService","limit":5}'
@@ -249,6 +250,29 @@ advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "list_files finds App.kt" "$text" "src/App.kt"
 assert_not_contains "list_files excludes README.md for *.kt filter" "$text" "README.md"
+
+echo "=== outline: lists a file's symbols in source order ==="
+call_tool "outline" '{"path":"src/App.kt"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "outline lists the class" "$text" "src/App.kt:1 [class]"
+assert_contains "outline lists the method" "$text" "src/App.kt:2 [function]"
+assert_contains "outline lists the top-level function" "$text" "src/App.kt:6 [function]"
+# Kotlin's grammar uses the same node type for a class property and a local `val`, so caller()'s
+# local `val s = ...` shows up too (see property_declaration in AstQueries.kt) — 4, not 3.
+assert_contains "outline reports a count" "$text" "Found 4 symbol(s)"
+
+echo "=== outline: unsupported extension is a clean error ==="
+call_tool "outline" '{"path":"README.md"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "outline rejects unsupported extensions cleanly" "$text" "unsupported extension"
+
+echo "=== outline: path traversal is rejected ==="
+call_tool "outline" '{"path":"../outside.txt"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "outline blocks escaping the project root" "$text" "escapes the project directory"
 
 echo "=== find_definition: finds the class definition, not a mention ==="
 call_tool "find_definition" '{"symbol":"UserService"}'

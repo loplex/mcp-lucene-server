@@ -4,29 +4,22 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
-import org.apache.lucene.document.Document
-import org.apache.lucene.document.Field
-import org.apache.lucene.document.StringField
-import org.apache.lucene.document.TextField
-import org.apache.lucene.index.DirectoryReader
-import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.index.IndexWriterConfig
 import org.apache.lucene.queryparser.classic.QueryParser
-import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.highlight.Highlighter
 import org.apache.lucene.search.highlight.QueryScorer
 import org.apache.lucene.search.highlight.SimpleFragmenter
 import org.apache.lucene.search.highlight.SimpleHTMLFormatter
-import org.apache.lucene.store.ByteBuffersDirectory
 import java.io.File
 import java.io.StringReader
 import java.util.Scanner
 import kotlin.system.exitProcess
 
 private const val SERVER_NAME = "mcp-lucene-server"
-private const val SERVER_VERSION = "1.0.0"
+private const val SERVER_VERSION = "2.0.0"
 private const val PROTOCOL_VERSION = "2024-11-05"
 private const val DEFAULT_LIMIT = 10
+private const val DEFAULT_GREP_LIMIT = 200
+private const val DEFAULT_LIST_LIMIT = 200
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
@@ -42,14 +35,11 @@ fun main(args: Array<String>) {
 
     val gson = Gson()
     val analyzer = CodeAnalyzer()
-    val index = ByteBuffersDirectory()
 
-    System.err.println("Indexing directory: ${targetDir.absolutePath}")
-    indexDirectory(targetDir, index, analyzer)
-    System.err.println("Indexing finished successfully.")
-
-    val reader = DirectoryReader.open(index)
-    val searcher = IndexSearcher(reader)
+    System.err.println("Opening persistent index for: ${targetDir.absolutePath}")
+    val indexManager = IndexManager(targetDir, analyzer)
+    val initialSync = indexManager.sync()
+    System.err.println("Initial sync: +${initialSync.added} ~${initialSync.updated} -${initialSync.deleted}")
 
     val scanner = Scanner(System.`in`)
     System.err.println("MCP Lucene Server listening on stdin...")
@@ -77,7 +67,7 @@ fun main(args: Array<String>) {
             val response = when (method) {
                 "initialize" -> createInitResponse(id)
                 "tools/list" -> createToolsListResponse(id)
-                "tools/call" -> handleToolCall(id, request, searcher, analyzer)
+                "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir)
                 else -> createErrorResponse(id, -32601, "Method not found: $method")
             }
 
@@ -87,28 +77,6 @@ fun main(args: Array<String>) {
             System.err.println("Error processing line: ${e.message}")
         }
     }
-}
-
-private fun indexDirectory(targetDir: File, index: ByteBuffersDirectory, analyzer: CodeAnalyzer) {
-    val config = IndexWriterConfig(analyzer)
-    val writer = IndexWriter(index, config)
-
-    targetDir.walkTopDown().forEach { file ->
-        if (file.isFile && !file.path.contains(".git") && !file.path.contains("node_modules")) {
-            try {
-                val relativePath = file.relativeTo(targetDir).path
-                val doc = Document()
-                doc.add(TextField("content", file.readText(), Field.Store.YES))
-                doc.add(StringField("path", relativePath, Field.Store.YES))
-                doc.add(StringField("filename", file.name, Field.Store.YES))
-                doc.add(StringField("extension", file.extension, Field.Store.YES))
-                writer.addDocument(doc)
-            } catch (e: Exception) {
-                System.err.println("Skip indexing (binary/unreadable file): ${file.path} (${e.message})")
-            }
-        }
-    }
-    writer.close()
 }
 
 fun createInitResponse(id: JsonElement): JsonObject {
@@ -131,65 +99,137 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
     val result = JsonObject()
     val tools = JsonArray()
 
-    val searchTool = JsonObject()
-    searchTool.addProperty("name", "search_code")
-    searchTool.addProperty(
-        "description",
-        "Lightning-fast search over the codebase using Apache Lucene syntax. Supports fields: content, path, filename, extension. Example: content:UserService AND extension:kt"
-    )
+    tools.add(tool(
+        name = "search_code",
+        description = "Analyzed fulltext search over the codebase using Apache Lucene syntax (best for conceptual/fuzzy queries). Supports fields: content, path, filename, extension. Example: content:UserService AND extension:kt. The index is automatically incrementally synced with the filesystem before every call.",
+        properties = linkedMapOf(
+            "query" to prop("string", "Lucene search query (default field: content)."),
+            "limit" to prop("number", "Maximum number of results (default $DEFAULT_LIMIT).")
+        ),
+        required = listOf("query")
+    ))
 
-    val inputSchema = JsonObject()
-    inputSchema.addProperty("type", "object")
+    tools.add(tool(
+        name = "grep_code",
+        description = "Exact regex/literal search read directly from files (always fresh, independent of the index). Returns file:line references with context. Use for exact matches, unlike search_code.",
+        properties = linkedMapOf(
+            "pattern" to prop("string", "Regular expression (Java regex) or literal text if literal=true."),
+            "literal" to prop("boolean", "If true, pattern is treated as literal text, not a regex (default false)."),
+            "caseSensitive" to prop("boolean", "Whether matching is case-sensitive (default true)."),
+            "context" to prop("number", "Number of context lines before and after a match (default 0)."),
+            "beforeContext" to prop("number", "Number of context lines before a match (overrides 'context')."),
+            "afterContext" to prop("number", "Number of context lines after a match (overrides 'context')."),
+            "filePattern" to prop("string", "Glob pattern for the relative path, e.g. 'src/**/*.kt' or '*.ts'."),
+            "outputMode" to prop("string", "content | files_with_matches | count (default content)."),
+            "maxMatches" to prop("number", "Maximum number of matches/files returned (default $DEFAULT_GREP_LIMIT).")
+        ),
+        required = listOf("pattern")
+    ))
 
-    val properties = JsonObject()
+    tools.add(tool(
+        name = "read_file",
+        description = "Reads a specific file from the project, optionally restricted to a line range. Result lines are prefixed with their line number.",
+        properties = linkedMapOf(
+            "path" to prop("string", "Path to the file, relative to the project root."),
+            "startLine" to prop("number", "First line (1-based, inclusive). Default 1."),
+            "endLine" to prop("number", "Last line (1-based, inclusive). Default end of file.")
+        ),
+        required = listOf("path")
+    ))
 
-    val queryProp = JsonObject()
-    queryProp.addProperty("type", "string")
-    queryProp.addProperty("description", "Lucene search query (default field: content).")
-    properties.add("query", queryProp)
+    tools.add(tool(
+        name = "list_files",
+        description = "Lists project files (respects .gitignore), optionally filtered by a glob pattern.",
+        properties = linkedMapOf(
+            "pattern" to prop("string", "Glob pattern for the relative path, e.g. '**/*.kt'. Lists everything if omitted."),
+            "limit" to prop("number", "Maximum number of files returned (default $DEFAULT_LIST_LIMIT).")
+        ),
+        required = emptyList()
+    ))
 
-    val limitProp = JsonObject()
-    limitProp.addProperty("type", "number")
-    limitProp.addProperty("description", "Maximum number of results (default 10).")
-    properties.add("limit", limitProp)
-
-    inputSchema.add("properties", properties)
-    val required = JsonArray()
-    required.add("query")
-    inputSchema.add("required", required)
-
-    searchTool.add("inputSchema", inputSchema)
-    tools.add(searchTool)
+    tools.add(tool(
+        name = "reindex_code",
+        description = "Explicitly runs an incremental sync of the Lucene index (search_code) with the filesystem and returns the number of added/updated/deleted documents. search_code already does this automatically; this tool is only for explicit verification.",
+        properties = linkedMapOf(),
+        required = emptyList()
+    ))
 
     result.add("tools", tools)
     res.add("result", result)
     return res
 }
 
-fun handleToolCall(id: JsonElement, request: JsonObject, searcher: IndexSearcher, analyzer: CodeAnalyzer): JsonObject {
-    val res = baseResponse(id)
+private fun prop(type: String, description: String): JsonObject {
+    val p = JsonObject()
+    p.addProperty("type", type)
+    p.addProperty("description", description)
+    return p
+}
+
+private fun tool(name: String, description: String, properties: Map<String, JsonObject>, required: List<String>): JsonObject {
+    val toolObj = JsonObject()
+    toolObj.addProperty("name", name)
+    toolObj.addProperty("description", description)
+
+    val inputSchema = JsonObject()
+    inputSchema.addProperty("type", "object")
+    val propsObj = JsonObject()
+    properties.forEach { (key, value) -> propsObj.add(key, value) }
+    inputSchema.add("properties", propsObj)
+
+    val requiredArray = JsonArray()
+    required.forEach { requiredArray.add(it) }
+    inputSchema.add("required", requiredArray)
+
+    toolObj.add("inputSchema", inputSchema)
+    return toolObj
+}
+
+fun handleToolCall(
+    id: JsonElement,
+    request: JsonObject,
+    indexManager: IndexManager,
+    analyzer: CodeAnalyzer,
+    root: File
+): JsonObject {
     val params = request.getAsJsonObject("params")
     val toolName = params?.get("name")?.asString
+    val arguments = params?.getAsJsonObject("arguments") ?: JsonObject()
 
-    if (toolName != "search_code") {
-        return createErrorResponse(id, -32602, "Unknown tool: $toolName")
+    val text = try {
+        when (toolName) {
+            "search_code" -> handleSearchCode(arguments, indexManager, analyzer)
+            "grep_code" -> handleGrepCode(arguments, root)
+            "read_file" -> handleReadFile(arguments, root)
+            "list_files" -> handleListFiles(arguments, root)
+            "reindex_code" -> handleReindexCode(indexManager)
+            else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
+        }
+    } catch (e: Exception) {
+        "Error executing tool '$toolName': ${e.message}"
     }
 
-    val arguments = params.getAsJsonObject("arguments")
-    val queryStr = arguments?.get("query")?.asString
-
-    if (queryStr.isNullOrBlank()) {
-        return createErrorResponse(id, -32602, "Missing required argument: query")
-    }
-
-    val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIMIT
-
+    val res = baseResponse(id)
     val result = JsonObject()
     val contentArray = JsonArray()
     val textContent = JsonObject()
     textContent.addProperty("type", "text")
+    textContent.addProperty("text", text)
+    contentArray.add(textContent)
+    result.add("content", contentArray)
+    res.add("result", result)
+    return res
+}
 
-    try {
+private fun handleSearchCode(arguments: JsonObject, indexManager: IndexManager, analyzer: CodeAnalyzer): String {
+    val queryStr = arguments.get("query")?.asString
+    if (queryStr.isNullOrBlank()) return "Missing required argument: query"
+    val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIMIT
+
+    indexManager.sync()
+    val searcher = indexManager.searcher
+
+    return try {
         val queryParser = QueryParser("content", analyzer)
         val query = queryParser.parse(queryStr)
         val docs = searcher.search(query, limit)
@@ -224,15 +264,47 @@ fun handleToolCall(id: JsonElement, request: JsonObject, searcher: IndexSearcher
             sb.append("\n\n")
         }
 
-        textContent.addProperty("text", sb.toString().trim())
+        sb.toString().trim()
     } catch (e: Exception) {
-        textContent.addProperty("text", "Lucene error parsing query: ${e.message}")
+        "Lucene error parsing query: ${e.message}"
     }
+}
 
-    contentArray.add(textContent)
-    result.add("content", contentArray)
-    res.add("result", result)
-    return res
+private fun handleGrepCode(arguments: JsonObject, root: File): String {
+    val pattern = arguments.get("pattern")?.asString
+    if (pattern.isNullOrBlank()) return "Missing required argument: pattern"
+
+    val context = arguments.get("context")?.asInt ?: 0
+    val options = GrepOptions(
+        pattern = pattern,
+        literal = arguments.get("literal")?.asBoolean ?: false,
+        caseSensitive = arguments.get("caseSensitive")?.asBoolean ?: true,
+        beforeContext = arguments.get("beforeContext")?.asInt ?: context,
+        afterContext = arguments.get("afterContext")?.asInt ?: context,
+        filePattern = arguments.get("filePattern")?.asString,
+        outputMode = arguments.get("outputMode")?.asString ?: "content",
+        maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
+    )
+    return runGrep(root, options)
+}
+
+private fun handleReadFile(arguments: JsonObject, root: File): String {
+    val path = arguments.get("path")?.asString
+    if (path.isNullOrBlank()) return "Missing required argument: path"
+    val startLine = arguments.get("startLine")?.asInt
+    val endLine = arguments.get("endLine")?.asInt
+    return readFileRange(root, path, startLine, endLine)
+}
+
+private fun handleListFiles(arguments: JsonObject, root: File): String {
+    val pattern = arguments.get("pattern")?.asString
+    val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIST_LIMIT
+    return runListFiles(root, pattern, limit)
+}
+
+private fun handleReindexCode(indexManager: IndexManager): String {
+    val result = indexManager.sync()
+    return "Reindex complete: +${result.added} added, ~${result.updated} updated, -${result.deleted} deleted."
 }
 
 private fun baseResponse(id: JsonElement): JsonObject {

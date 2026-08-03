@@ -105,6 +105,21 @@ class FindDefinitionToolTest {
     }
 
     @Test
+    fun `a symbol only mentioned in a comment or string literal is not a definition`(@TempDir tempDir: File) {
+        File(tempDir, "Sample.kt").writeText(
+            """
+            package test
+
+            // This comment mentions class Foo but it is not a real definition
+            val commentTrap = "class Foo { val Foo = 1 }"
+            """.trimIndent()
+        )
+
+        val result = runFindDefinition(tempDir, "Foo", 50)
+        assertTrue(result.contains("No definition found"))
+    }
+
+    @Test
     fun `maxMatches caps the number of returned definitions`(@TempDir tempDir: File) {
         val sb = StringBuilder()
         repeat(5) { i -> sb.append("class Dup$i {}\nfun helper() {}\n") }

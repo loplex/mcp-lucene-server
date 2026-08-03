@@ -162,10 +162,20 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
 
     tools.add(tool(
         name = "find_definition",
-        description = "Finds where a symbol is DEFINED (class/interface/object/function/property/...), as opposed to grep_code, which finds every mention including call sites, imports, and comments. This is a per-language heuristic over regular expressions (not a real AST parser), so it can have false negatives on unusual code styles. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs. Always reads current file content, independent of the index.",
+        description = "Finds where a symbol is DEFINED (class/interface/object/function/property/...), as opposed to grep_code, which finds every mention including call sites, imports, and comments. Backed by a real tree-sitter parse tree (not regex/text matching), so a symbol name appearing inside a comment or string literal is never mistaken for a definition. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs. Always reads current file content, independent of the index.",
         properties = linkedMapOf(
             "symbol" to prop("string", "Exact symbol name (identifier), e.g. 'UserService'."),
             "maxMatches" to prop("number", "Maximum number of returned definitions (default $DEFAULT_GREP_LIMIT).")
+        ),
+        required = listOf("symbol")
+    ))
+
+    tools.add(tool(
+        name = "find_references",
+        description = "Finds real-code usages of a symbol (calls, type references, member access, imports, plain reads/writes), as opposed to grep_code, which also matches the same text inside comments and string literals. Backed by the same tree-sitter parse tree as find_definition. This is a name-based scan across the whole project, not a scope/import-aware resolver, so unrelated symbols that share a name are not distinguished. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs. Always reads current file content, independent of the index.",
+        properties = linkedMapOf(
+            "symbol" to prop("string", "Exact symbol name (identifier), e.g. 'UserService'."),
+            "maxMatches" to prop("number", "Maximum number of returned references (default $DEFAULT_GREP_LIMIT).")
         ),
         required = listOf("symbol")
     ))
@@ -227,6 +237,7 @@ fun handleToolCall(
             "read_file" -> handleReadFile(arguments, root)
             "list_files" -> handleListFiles(arguments, root)
             "find_definition" -> handleFindDefinition(arguments, root)
+            "find_references" -> handleFindReferences(arguments, root)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -332,6 +343,13 @@ private fun handleFindDefinition(arguments: JsonObject, root: File): String {
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
     return runFindDefinition(root, symbol, maxMatches)
+}
+
+private fun handleFindReferences(arguments: JsonObject, root: File): String {
+    val symbol = arguments.get("symbol")?.asString
+    if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
+    val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
+    return runFindReferences(root, symbol, maxMatches)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

@@ -54,7 +54,7 @@ setup_fixture() {
     git -C "$FIXTURE_DIR" init -q
     mkdir -p "$FIXTURE_DIR/src" "$FIXTURE_DIR/ignored"
     printf 'ignored/\n' > "$FIXTURE_DIR/.gitignore"
-    printf 'class UserService {\n    fun login() {}\n}\n' > "$FIXTURE_DIR/src/App.kt"
+    printf 'class UserService {\n    fun login() {}\n}\n\n// UserService mentioned only in a comment here, not a real reference\nfun caller() {\n    val s = UserService()\n    s.login()\n}\n' > "$FIXTURE_DIR/src/App.kt"
     printf 'TODO: refactor UserService\n' > "$FIXTURE_DIR/README.md"
     printf 'should never be indexed or grepped\n' > "$FIXTURE_DIR/ignored/vendor.js"
 }
@@ -164,12 +164,13 @@ send "tools/list" '{}'
 advance_response_line
 line=$(fetch_raw "$RESPONSE_LINE")
 tool_names=$(echo "$line" | jq -r '.result.tools[].name' | sort | tr '\n' ' ')
-assert_contains "tools/list exposes all 6 tools" "$tool_names" "find_definition"
-assert_contains "tools/list exposes all 6 tools" "$tool_names" "grep_code"
-assert_contains "tools/list exposes all 6 tools" "$tool_names" "list_files"
-assert_contains "tools/list exposes all 6 tools" "$tool_names" "read_file"
-assert_contains "tools/list exposes all 6 tools" "$tool_names" "reindex_code"
-assert_contains "tools/list exposes all 6 tools" "$tool_names" "search_code"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "find_definition"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "find_references"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "grep_code"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "list_files"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "read_file"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "reindex_code"
+assert_contains "tools/list exposes all 7 tools" "$tool_names" "search_code"
 
 echo "=== search_code ==="
 call_tool "search_code" '{"query":"content:UserService","limit":5}'
@@ -243,12 +244,35 @@ text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "find_definition locates the class" "$text" "src/App.kt:1"
 assert_contains "find_definition tags the kind" "$text" "[class]"
 assert_not_contains "find_definition skips the README mention" "$text" "README.md"
+assert_contains "find_definition is not fooled by the comment mention (AST, not regex/text)" "$text" "Found 1 definition"
 
 echo "=== find_definition: unknown symbol reports no definition ==="
 call_tool "find_definition" '{"symbol":"TotallyUnknownSymbolZZZ"}'
 advance_response_line
 text=$(fetch_text "$RESPONSE_LINE")
 assert_contains "find_definition reports absence cleanly" "$text" "No definition found"
+
+echo "=== find_references: finds the definition and the real call site, not the comment ==="
+call_tool "find_references" '{"symbol":"UserService"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_references reports exactly definition + call (not the comment mention)" "$text" "Found 2 reference(s)"
+assert_contains "find_references tags the declaration" "$text" "src/App.kt:1 [definition]"
+assert_contains "find_references tags the constructor call" "$text" "src/App.kt:7 [call]"
+assert_not_contains "find_references skips the README mention" "$text" "README.md"
+
+echo "=== find_references: finds a method call site ==="
+call_tool "find_references" '{"symbol":"login"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_references tags the method declaration" "$text" "src/App.kt:2 [definition]"
+assert_contains "find_references tags the method call" "$text" "src/App.kt:8 [call]"
+
+echo "=== find_references: unknown symbol reports no references ==="
+call_tool "find_references" '{"symbol":"TotallyUnknownSymbolZZZ"}'
+advance_response_line
+text=$(fetch_text "$RESPONSE_LINE")
+assert_contains "find_references reports absence cleanly" "$text" "No references found"
 
 echo "=== reindex_code: explicit resync reports a summary ==="
 call_tool "reindex_code" '{}'

@@ -128,4 +128,21 @@ class FindDefinitionToolTest {
         val matches = findDefinitions(tempDir, "helper", maxMatches = 2)
         assertTrue(matches.size <= 2)
     }
+
+    @Test
+    fun `a shared AstCache still reflects file edits across calls`(@TempDir tempDir: File) {
+        val file = File(tempDir, "App.kt")
+        file.writeText("class Old {}\n")
+        val cache = AstCache()
+
+        val before = runFindDefinition(tempDir, "New", 50, cache)
+        assertTrue(before.contains("No definition found"))
+
+        Thread.sleep(1100) // ensure a distinct filesystem mtime (1s resolution on some filesystems)
+        file.writeText("class New {}\n")
+        val after = runFindDefinition(tempDir, "New", 50, cache)
+
+        assertTrue(after.contains("App.kt:1"))
+        assertTrue(after.contains("[class]"))
+    }
 }

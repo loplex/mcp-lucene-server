@@ -212,4 +212,22 @@ class FindReferencesToolTest {
         val matches = findReferences(tempDir, "helper", maxMatches = 2)
         assertTrue(matches.size <= 2)
     }
+
+    @Test
+    fun `a shared AstCache still reflects file edits across calls`(@TempDir tempDir: File) {
+        val file = File(tempDir, "App.kt")
+        file.writeText("fun helper() {}\nval x = helper()\n")
+        val cache = AstCache()
+
+        val before = runFindReferences(tempDir, "helper", 50, cache)
+        assertTrue(before.contains("App.kt:2"))
+        assertFalse(before.contains("App.kt:3"))
+
+        Thread.sleep(1100) // ensure a distinct filesystem mtime (1s resolution on some filesystems)
+        file.writeText("fun helper() {}\nval x = helper()\nval y = helper()\n")
+        val after = runFindReferences(tempDir, "helper", 50, cache)
+
+        assertTrue(after.contains("App.kt:2"))
+        assertTrue(after.contains("App.kt:3"))
+    }
 }

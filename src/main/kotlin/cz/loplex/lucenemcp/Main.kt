@@ -47,6 +47,7 @@ fun main(args: Array<String>) {
 
     val indexWatcher = IndexWatcher(targetDir, indexManager)
     val watcherStarted = indexWatcher.start()
+    val astCache = AstCache()
     if (watcherStarted) {
         System.err.println("File watcher active: index stays in sync in the background.")
     } else {
@@ -84,7 +85,7 @@ fun main(args: Array<String>) {
             val response = when (method) {
                 "initialize" -> createInitResponse(id)
                 "tools/list" -> createToolsListResponse(id)
-                "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir, watcherStarted)
+                "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir, watcherStarted, astCache)
                 else -> createErrorResponse(id, -32601, "Method not found: $method")
             }
 
@@ -228,7 +229,8 @@ fun handleToolCall(
     indexManager: IndexManager,
     analyzer: Analyzer,
     root: File,
-    watcherActive: Boolean
+    watcherActive: Boolean,
+    astCache: AstCache
 ): JsonObject {
     val params = request.getAsJsonObject("params")
     val toolName = params?.get("name")?.asString
@@ -240,8 +242,8 @@ fun handleToolCall(
             "grep_code" -> handleGrepCode(arguments, root)
             "read_file" -> handleReadFile(arguments, root)
             "list_files" -> handleListFiles(arguments, root)
-            "find_definition" -> handleFindDefinition(arguments, root)
-            "find_references" -> handleFindReferences(arguments, root)
+            "find_definition" -> handleFindDefinition(arguments, root, astCache)
+            "find_references" -> handleFindReferences(arguments, root, astCache)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -342,18 +344,18 @@ private fun handleListFiles(arguments: JsonObject, root: File): String {
     return runListFiles(root, pattern, limit)
 }
 
-private fun handleFindDefinition(arguments: JsonObject, root: File): String {
+private fun handleFindDefinition(arguments: JsonObject, root: File, astCache: AstCache): String {
     val symbol = arguments.get("symbol")?.asString
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
-    return runFindDefinition(root, symbol, maxMatches)
+    return runFindDefinition(root, symbol, maxMatches, astCache)
 }
 
-private fun handleFindReferences(arguments: JsonObject, root: File): String {
+private fun handleFindReferences(arguments: JsonObject, root: File, astCache: AstCache): String {
     val symbol = arguments.get("symbol")?.asString
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
-    return runFindReferences(root, symbol, maxMatches)
+    return runFindReferences(root, symbol, maxMatches, astCache)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

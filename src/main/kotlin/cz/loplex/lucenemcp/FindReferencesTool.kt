@@ -25,10 +25,13 @@ private class FileContext(val file: File, val relativePath: String, val language
  * rather than silently dropped or misclassified by [classifyReferenceKind] (a class name is, for
  * example, structurally a `type_identifier` like any other type reference).
  */
-fun findReferences(root: File, symbol: String, maxMatches: Int): List<ReferenceMatch> {
-    val contexts = listProjectFiles(root).sortedBy { it.path }.mapNotNull { file ->
+fun findReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): List<ReferenceMatch> {
+    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+    astCache.prune(projectFiles.mapTo(HashSet()) { it.absolutePath })
+
+    val contexts = projectFiles.mapNotNull { file ->
         val languageName = languageNameFor(file.extension) ?: return@mapNotNull null
-        val parsed = parseFile(file, file.extension) ?: return@mapNotNull null
+        val parsed = astCache.getOrParse(file, file.extension) ?: return@mapNotNull null
         val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
         FileContext(file, relativePath, languageName, parsed)
     }
@@ -87,14 +90,14 @@ fun findReferences(root: File, symbol: String, maxMatches: Int): List<ReferenceM
     return results
 }
 
-fun runFindReferences(root: File, symbol: String, maxMatches: Int): String {
+fun runFindReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): String {
     val trimmed = symbol.trim()
     if (trimmed.isEmpty()) return "Missing required argument: symbol"
     if (!IDENTIFIER.matches(trimmed)) {
         return "Invalid symbol: only identifier characters are supported (letters, digits, underscore, not starting with a digit)."
     }
 
-    val matches = findReferences(root, trimmed, maxMatches)
+    val matches = findReferences(root, trimmed, maxMatches, astCache)
     if (matches.isEmpty()) {
         return "No references found for '$trimmed'. AST-based search covers: " +
             "${SUPPORTED_AST_EXTENSIONS.sorted().joinToString(", ")} files. " +

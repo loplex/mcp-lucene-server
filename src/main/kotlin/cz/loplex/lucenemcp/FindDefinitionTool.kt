@@ -13,12 +13,14 @@ data class DefinitionMatch(val path: String, val line: Int, val kind: String, va
  * definition. Always parses current file content directly (like `grep_code`) — no index involved,
  * never stale.
  */
-fun findDefinitions(root: File, symbol: String, maxMatches: Int): List<DefinitionMatch> {
+fun findDefinitions(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): List<DefinitionMatch> {
     val results = mutableListOf<DefinitionMatch>()
+    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+    astCache.prune(projectFiles.mapTo(HashSet()) { it.absolutePath })
 
-    outer@ for (file in listProjectFiles(root).sortedBy { it.path }) {
+    outer@ for (file in projectFiles) {
         val languageName = languageNameFor(file.extension) ?: continue
-        val parsed = parseFile(file, file.extension) ?: continue
+        val parsed = astCache.getOrParse(file, file.extension) ?: continue
         val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
 
         for (hit in definitionHitsInFile(parsed, languageName, symbol)) {
@@ -29,14 +31,14 @@ fun findDefinitions(root: File, symbol: String, maxMatches: Int): List<Definitio
     return results.sortedWith(compareBy({ it.path }, { it.line }))
 }
 
-fun runFindDefinition(root: File, symbol: String, maxMatches: Int): String {
+fun runFindDefinition(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): String {
     val trimmed = symbol.trim()
     if (trimmed.isEmpty()) return "Missing required argument: symbol"
     if (!IDENTIFIER.matches(trimmed)) {
         return "Invalid symbol: only identifier characters are supported (letters, digits, underscore, not starting with a digit)."
     }
 
-    val matches = findDefinitions(root, trimmed, maxMatches)
+    val matches = findDefinitions(root, trimmed, maxMatches, astCache)
     if (matches.isEmpty()) {
         return "No definition found for '$trimmed'. AST-based search covers: " +
             "${SUPPORTED_AST_EXTENSIONS.sorted().joinToString(", ")} files. " +

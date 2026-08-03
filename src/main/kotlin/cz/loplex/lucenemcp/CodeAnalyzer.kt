@@ -1,6 +1,7 @@
 package cz.loplex.lucenemcp
 
 import org.apache.lucene.analysis.Analyzer
+import org.apache.lucene.analysis.core.FlattenGraphFilter
 import org.apache.lucene.analysis.core.WhitespaceTokenizer
 import org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilter
 
@@ -16,6 +17,10 @@ class CodeAnalyzer : Analyzer() {
             WordDelimiterGraphFilter.SPLIT_ON_NUMERICS,
             null
         )
-        return TokenStreamComponents(tokenizer, filter)
+        // WordDelimiterGraphFilter emits a token *graph* (parallel paths at the same position, e.g.
+        // "openDatabase" also splits into "open"+"Database"). Per its own Javadoc, indexing a graph
+        // stream without flattening it first corrupts term positions — phrase/proximity queries then
+        // silently match nothing, even though plain term queries (which ignore position) still work.
+        return TokenStreamComponents(tokenizer, FlattenGraphFilter(filter))
     }
 }

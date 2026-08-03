@@ -92,6 +92,23 @@ class IndexManagerTest {
     }
 
     @Test
+    fun `phrase and proximity queries match, proving token positions survive indexing`(@TempDir tempDir: File) {
+        // WordDelimiterGraphFilter emits a token graph; without FlattenGraphFilter, indexed
+        // positions are corrupted and phrase/proximity queries silently match nothing, even though
+        // plain term queries (which ignore position) keep working. Plain, undecomposed words expose
+        // this cleanly, without WordDelimiterGraphFilter's separate camelCase-splitting behavior
+        // (which inflates position counts on both the query and the document side independently —
+        // see NOTES/AI/plan.md step 13 for why that case needs a different field, not this fix).
+        File(tempDir, "a.kt").writeText("alpha beta gamma delta")
+        val manager = open(tempDir)
+        manager.sync()
+
+        assertEquals(1L, hitCountFor(manager, "content:\"alpha beta\""))
+        assertEquals(1L, hitCountFor(manager, "content:\"alpha gamma\"~2"))
+        assertEquals(0L, hitCountFor(manager, "content:\"alpha gamma\""))
+    }
+
+    @Test
     fun `index survives a server restart without a full rebuild`(@TempDir tempDir: File) {
         File(tempDir, "a.kt").writeText("class SurvivesRestart")
         val first = open(tempDir)

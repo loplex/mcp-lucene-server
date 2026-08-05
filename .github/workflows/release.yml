@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+
+      - name: Extract Version
+        id: extract_version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RAW_TAG="${GITHUB_REF#refs/tags/}"
+            MAVEN_VERSION="${RAW_TAG#v}"
+            echo "VERSION=$RAW_TAG" >> $GITHUB_OUTPUT
+            echo "MAVEN_VERSION=$MAVEN_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=latest" >> $GITHUB_OUTPUT
+            echo "MAVEN_VERSION=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update pom.xml version
+        shell: bash
+        if: startsWith(github.ref, 'refs/tags/')
+        run: mvn versions:set -DnewVersion=${{ steps.extract_version.outputs.MAVEN_VERSION }} -DgenerateBackupPoms=false
+
+      - name: Build Fat JAR
+        if: matrix.os == 'ubuntu-latest'
+        run: mvn clean package -DskipTests
+
+      - name: Build Native Image
+        run: mvn package -Pnative -DskipTests
+
+      - name: Rename Native Binary (Unix)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: |
+          VERSION="${{ steps.extract_version.outputs.VERSION }}"
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            mv target/mcp-lucene-server target/mcp-lucene-server-$VERSION-linux-amd64
+          else
+            mv target/mcp-lucene-server target/mcp-lucene-server-$VERSION-macos-aarch64
+          fi
+
+      - name: Rename Native Binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: move target\mcp-lucene-server.exe target\mcp-lucene-server-${{ steps.extract_version.outputs.VERSION }}-windows-amd64.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          generate_release_notes: true
+          files: |
+            target/mcp-lucene-server-${{ steps.extract_version.outputs.MAVEN_VERSION }}.jar
+            target/mcp-lucene-server-*-linux-amd64
+            target/mcp-lucene-server-*-macos-aarch64
+            target/mcp-lucene-server-*-windows-amd64.exe

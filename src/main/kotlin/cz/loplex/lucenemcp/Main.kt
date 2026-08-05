@@ -12,9 +12,12 @@ import org.apache.lucene.search.highlight.QueryScorer
 import org.apache.lucene.search.highlight.SimpleFragmenter
 import org.apache.lucene.search.highlight.SimpleHTMLFormatter
 import java.io.File
+import java.io.InputStreamReader
 import java.io.StringReader
+import java.net.InetSocketAddress
 import java.util.Scanner
 import kotlin.system.exitProcess
+import com.sun.net.httpserver.HttpServer
 
 private const val SERVER_NAME = "mcp-lucene-server"
 private const val SERVER_VERSION = "2.0.0"
@@ -22,10 +25,14 @@ private const val PROTOCOL_VERSION = "2024-11-05"
 private const val DEFAULT_LIMIT = 10
 private const val DEFAULT_GREP_LIMIT = 200
 private const val DEFAULT_LIST_LIMIT = 200
+private const val DEFAULT_HTTP_HOST = "127.0.0.1"
+
+/** Parsed `--http <port>` / `--http-host <host>` CLI flags — see [parseHttpOptions]. */
+data class HttpOptions(val host: String, val port: Int)
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
-        System.err.println("Error: missing required argument <project-directory>. Usage: mcp-lucene-server <absolute-path-to-project>")
+        System.err.println("Error: missing required argument <project-directory>. Usage: mcp-lucene-server <absolute-path-to-project> [--http <port>] [--http-host <host>]")
         exitProcess(1)
     }
 
@@ -34,6 +41,8 @@ fun main(args: Array<String>) {
         System.err.println("Error: '${targetDir.path}' is not a valid directory.")
         exitProcess(1)
     }
+
+    val httpOptions = parseHttpOptions(args)
 
     val gson = Gson()
     // "words" gets its own analyzer for real word-distance phrase/proximity queries (see
@@ -59,42 +68,132 @@ fun main(args: Array<String>) {
         indexManager.close()
     })
 
-    val scanner = Scanner(System.`in`)
-    System.err.println("MCP Lucene Server listening on stdin...")
+    if (httpOptions == null) {
+        val scanner = Scanner(System.`in`)
+        System.err.println("MCP Lucene Server listening on stdin...")
 
-    while (scanner.hasNextLine()) {
-        val line = scanner.nextLine()
-        if (line.isBlank()) continue
-
-        try {
-            val request = gson.fromJson(line, JsonObject::class.java)
-            val method = request.get("method")?.asString
-            val id = request.get("id")
-
-            if (method == null) {
-                System.err.println("Ignoring malformed request without 'method': $line")
-                continue
+        while (scanner.hasNextLine()) {
+            val line = scanner.nextLine()
+            val responseStr = processRequest(line, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
+            if (responseStr != null) {
+                println(responseStr)
+                System.out.flush()
             }
+        }
+    } else {
+        startHttpServer(httpOptions, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
+    }
+}
 
-            // JSON-RPC notifications (e.g. "notifications/initialized") carry no "id" and must not be answered.
-            if (id == null) {
-                System.err.println("Received notification: $method")
-                continue
+fun parseHttpOptions(args: Array<String>): HttpOptions? {
+    var port: Int? = null
+    var host = DEFAULT_HTTP_HOST
+    var i = 1
+    while (i < args.size) {
+        when (args[i]) {
+            "--http" -> {
+                if (i + 1 < args.size) {
+                    port = args[++i].toIntOrNull()
+                }
             }
-
-            val response = when (method) {
-                "initialize" -> createInitResponse(id)
-                "tools/list" -> createToolsListResponse(id)
-                "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir, watcherStarted, astCache)
-                else -> createErrorResponse(id, -32601, "Method not found: $method")
+            "--http-host" -> {
+                if (i + 1 < args.size) {
+                    host = args[++i]
+                }
             }
+        }
+        i++
+    }
+    return if (port != null) HttpOptions(host, port) else null
+}
 
-            println(gson.toJson(response))
-            System.out.flush()
-        } catch (e: Exception) {
-            System.err.println("Error processing line: ${e.message}")
+fun processRequest(
+    line: String,
+    gson: Gson,
+    indexManager: IndexManager,
+    analyzer: Analyzer,
+    targetDir: File,
+    watcherStarted: Boolean,
+    astCache: AstCache
+): String? {
+    if (line.isBlank()) return null
+    return try {
+        val request = gson.fromJson(line, JsonObject::class.java)
+        val method = request.get("method")?.asString
+        val id = request.get("id")
+
+        if (method == null) {
+            System.err.println("Ignoring malformed request without 'method': $line")
+            return null
+        }
+
+        // JSON-RPC notifications (e.g. "notifications/initialized") carry no "id" and must not be answered.
+        if (id == null) {
+            System.err.println("Received notification: $method")
+            return null
+        }
+
+        val response = when (method) {
+            "initialize" -> createInitResponse(id)
+            "tools/list" -> createToolsListResponse(id)
+            "tools/call" -> handleToolCall(id, request, indexManager, analyzer, targetDir, watcherStarted, astCache)
+            else -> createErrorResponse(id, -32601, "Method not found: $method")
+        }
+
+        gson.toJson(response)
+    } catch (e: Exception) {
+        System.err.println("Error processing line: ${e.message}")
+        null
+    }
+}
+
+fun startHttpServer(
+    httpOptions: HttpOptions,
+    gson: Gson,
+    indexManager: IndexManager,
+    analyzer: Analyzer,
+    targetDir: File,
+    watcherStarted: Boolean,
+    astCache: AstCache
+) {
+    val server = HttpServer.create(InetSocketAddress(httpOptions.host, httpOptions.port), 0)
+    
+    server.createContext("/") { exchange ->
+        if (exchange.requestMethod == "POST") {
+            try {
+                val reader = InputStreamReader(exchange.requestBody, "UTF-8")
+                val requestBody = reader.readText()
+                
+                val responseStr = processRequest(requestBody, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
+                
+                if (responseStr != null) {
+                    val responseBytes = responseStr.toByteArray(Charsets.UTF_8)
+                    exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
+                    exchange.sendResponseHeaders(200, responseBytes.size.toLong())
+                    exchange.responseBody.use { os ->
+                        os.write(responseBytes)
+                    }
+                } else {
+                    exchange.sendResponseHeaders(400, -1)
+                }
+            } catch (e: Exception) {
+                System.err.println("HTTP Error: ${e.message}")
+                exchange.sendResponseHeaders(500, -1)
+            } finally {
+                exchange.close()
+            }
+        } else {
+            exchange.sendResponseHeaders(405, -1) // Method Not Allowed
+            exchange.close()
         }
     }
+    
+    server.executor = null // Use default executor
+    server.start()
+    System.err.println("MCP Lucene Server listening on http://${httpOptions.host}:${httpOptions.port}")
+    
+    // Block the main thread since the server runs in a daemon thread
+    Thread.currentThread().join()
 }
 
 fun createInitResponse(id: JsonElement): JsonObject {

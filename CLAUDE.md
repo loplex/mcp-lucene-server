@@ -9,8 +9,8 @@ code-search tools backed by Apache Lucene (fulltext) and tree-sitter (AST-aware 
 search). It uses a Daemon-Proxy architecture: a background HTTP/SSE daemon keeps the heavy Lucene index loaded in memory, while a lightweight proxy bridges the stdio JSON-RPC requests from the MCP client to the daemon.
 The server takes the target project's absolute path as its one CLI argument.
 
-The ten tools it exposes (`search_code`, `grep_code`, `read_file`, `list_files`,
-`find_definition`, `find_references`, `find_implementations`, `outline`, `search_ast`, `call_hierarchy`, `reindex_code`) are
+The eleven tools it exposes (`search_code`, `grep_code`, `read_file`, `list_files`,
+`find_definition`, `find_references`, `find_implementations`, `outline`, `search_ast`, `call_hierarchy`, `reindex_code`, `add_external_roots`) are
 documented for consumers in `CLAUDE_INSTRUCTIONS.md` — read that file for behavior/semantics: this
 file is about building and maintaining the server itself.
 

@@ -632,6 +632,15 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
         required = emptyList()
     ))
 
+    tools.add(tool(
+        name = "add_external_roots",
+        description = "Adds new external roots (directories) to be indexed and searched at runtime. Immediately triggers a sync for the newly added directories.",
+        properties = linkedMapOf(
+            "directories" to prop("string", "Comma-separated list of absolute paths to add as external roots (e.g. '/path/to/node_modules,/path/to/vendor').")
+        ),
+        required = listOf("directories")
+    ))
+
     result.add("tools", tools)
     res.add("result", result)
     return res
@@ -670,9 +679,9 @@ fun handleToolCall(
     analyzer: Analyzer,
     root: File,
     watcherActive: Boolean,
-    astCache: AstCache,
-    externalRoots: List<File>
+    astCache: AstCache
 ): JsonObject {
+    val externalRoots = indexManager.externalRoots
     val params = request.getAsJsonObject("params")
     val toolName = params?.get("name")?.asString
     val arguments = params?.getAsJsonObject("arguments") ?: JsonObject()
@@ -690,6 +699,7 @@ fun handleToolCall(
             "search_ast" -> handleSearchAst(arguments, root, astCache, externalRoots)
             "call_hierarchy" -> handleCallHierarchy(arguments, root, astCache, externalRoots)
             "reindex_code" -> handleReindexCode(indexManager)
+            "add_external_roots" -> handleAddExternalRoots(arguments, indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
     } catch (e: Exception) {
@@ -831,6 +841,32 @@ private fun handleCallHierarchy(arguments: JsonObject, root: File, astCache: Ast
 private fun handleReindexCode(indexManager: IndexManager): String {
     val result = indexManager.sync()
     return "Reindex complete: +${result.added} added, ~${result.updated} updated, -${result.deleted} deleted."
+}
+
+private fun handleAddExternalRoots(arguments: JsonObject, indexManager: IndexManager): String {
+    val directoriesStr = arguments.get("directories")?.asString
+    if (directoriesStr.isNullOrBlank()) return "Missing required argument: directories"
+    
+    val dirs = directoriesStr.split(",").map { File(it.trim()) }
+    val invalid = dirs.filter { !it.isDirectory }
+    if (invalid.isNotEmpty()) {
+        return "Error: The following paths are not valid directories: " + invalid.joinToString(", ") { it.absolutePath }
+    }
+    
+    // Merge new roots, avoiding duplicates
+    val existingRoots = indexManager.externalRoots.map { it.absolutePath }
+    val newRoots = dirs.filter { it.absolutePath !in existingRoots }
+    
+    if (newRoots.isEmpty()) {
+        return "No new valid directories to add. Current external roots: " + indexManager.externalRoots.joinToString(", ") { it.absolutePath }
+    }
+    
+    indexManager.externalRoots = indexManager.externalRoots + newRoots
+    val syncResult = indexManager.sync()
+    
+    return "Successfully added ${newRoots.size} external roots.\n" +
+           "Sync result: +${syncResult.added} ~${syncResult.updated} -${syncResult.deleted}.\n" +
+           "Total active external roots: ${indexManager.externalRoots.size}."
 }
 
 private fun baseResponse(id: JsonElement): JsonObject {

@@ -25,7 +25,7 @@ data class SyncResult(val added: Int, val updated: Int, val deleted: Int) {
  * [sync] performs a cheap mtime-based diff (stat only, no re-read of unchanged files) so it is safe
  * to call before every search — search_code is never stale, and restarts skip a full rebuild.
  */
-class IndexManager(private val root: File, private val analyzer: Analyzer, private val externalRoots: List<File> = emptyList()) {
+class IndexManager(private val root: File, private val analyzer: Analyzer, var externalRoots: List<File> = emptyList()) {
     private val indexDirectory = NIOFSDirectory(cacheIndexPath(root))
     private val writer = IndexWriter(indexDirectory, IndexWriterConfig(analyzer))
     private var reader: DirectoryReader

@@ -26,6 +26,7 @@ Communication is strictly JSON-RPC 2.0 over standard I/O for the MCP client, but
 - **`read_file`** — reads a file or line range.
 - **`list_files`** — lists project files by glob pattern (respects `.gitignore`).
 - **`reindex_code`** — forces an incremental resync of the `search_code` index.
+- **`add_external_roots`** — adds new external directories to the index at runtime.
 
 Supported languages for the tree-sitter-backed tools: Kotlin, Java, TypeScript/TSX, JavaScript,
 Python, Go, Rust, C, C++, C#, PHP, Ruby, Swift (`find_implementations` excludes Go — its interfaces are structural, with no

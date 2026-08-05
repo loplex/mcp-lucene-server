@@ -1,7 +1,7 @@
 # INSTRUCTIONS FOR CLAUDE (MCP Lucene Integration)
 
 You are equipped with a code-search MCP server backed by Apache Lucene and tree-sitter, meant to
-replace the built-in Grep/Glob/Read tools for this project. It exposes nine tools:
+replace the built-in Grep/Glob/Read tools for this project. It exposes eleven tools:
 
 - `search_code` — analyzed/fuzzy fulltext search (word-form aware) over a persistent, auto-synced
   Lucene index. Best for conceptual lookups. Fields: `content`, `path`, `filename`, `extension`,
@@ -20,7 +20,7 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes nine tool
 - `find_definition` — finds where a symbol is DEFINED (class/interface/function/property/...),
   backed by a real tree-sitter parse tree, not text/regex matching — a symbol name that happens to
   appear inside a comment or string literal is never mistaken for a definition. Supported: kt, kts,
-  java, ts, tsx, js, jsx, mjs, py, go, rs.
+  java, ts, tsx, js, jsx, mjs, py, go, rs, c, cpp, cs, php, rb, swift.
 - `find_references` — finds real-code usages of a symbol (calls, type references, member access,
   imports), tagged with a cheap `[kind]` (`call`/`type`/`member`/`import`/`definition`/`reference`).
   Same AST basis as `find_definition`. Bare (unqualified) hits are narrowed by import/package
@@ -45,8 +45,11 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes nine tool
 - `outline` — lists every symbol a file defines (class/interface/function/property/...), in source
   order, without reading the whole file. Same tree-sitter basis as `find_definition`/
   `find_references`. Nested members (e.g. a class's methods) are included alongside top-level
-  declarations. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs.
+  declarations. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs, c, cpp, cs, php, rb, swift.
+- `search_ast` — runs raw tree-sitter queries against all files of a specific language for structural search.
+- `call_hierarchy` — finds incoming or outgoing function calls (caller/callee) for a symbol using AST analysis.
 - `list_files` — list project files by glob pattern (respects `.gitignore`).
+- `add_external_roots` — adds new external directories to the index at runtime.
 - `reindex_code` — force an incremental resync of the `search_code` index (rarely needed —
   `search_code` already resyncs automatically before every call).
 
@@ -60,6 +63,9 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes nine tool
 7. Have a `file:line` hit and need the surrounding code → `read_file` with a line range.
 8. Need a quick structural overview of one file (its classes/functions/properties) before deciding
    what to read → `outline`.
+9. Need to trace caller/callee relationships → `call_hierarchy`.
+10. Need custom structural search → `search_ast`.
+11. Need to index dependencies/vendor folders dynamically → `add_external_roots`.
 
 ## Goal
 Keep your active session memory minimal. Run a targeted query first, retrieve only the relevant

@@ -5,8 +5,7 @@ agent fast, accurate code-search tools over any project — backed by a persiste
 index for fulltext search and tree-sitter for AST-aware structural search. It's meant to replace
 an agent's built-in grep/glob/read-file tools for a target codebase.
 
-Communication is JSON-RPC 2.0 over stdio (one process per target project) — there is no HTTP
-server or network listener involved.
+Communication is strictly JSON-RPC 2.0 over standard I/O for the MCP client, but internally it uses a lightweight Proxy-Daemon architecture over HTTP/SSE. This allows the heavy Lucene JVM to stay alive in the background between editor restarts, sharing a single loaded index across multiple client windows.
 
 ## Tools
 
@@ -54,14 +53,23 @@ java -jar target/mcp-lucene-server-1.0-SNAPSHOT.jar /absolute/path/to/target-pro
 ```
 
 The target project directory is a required argument — the server indexes and searches that
-project, not its own source tree. On first run it builds a persistent Lucene index under
-`$XDG_CACHE_HOME/mcp-lucene-server/` (falls back to `~/.cache`); later runs reuse and
-incrementally update it, and a background file watcher keeps it in sync while the server runs.
+project, not its own source tree. 
+
+### Architecture & Modes
+
+By default, the server acts as an intelligent **Proxy**. It checks for an existing background daemon for the project (in `$XDG_CACHE_HOME/mcp-lucene-server/.../daemon.port`), connects to it via HTTP Server-Sent Events (SSE), and bridges `stdio` from your MCP client to the daemon. If no daemon exists, it spawns one automatically in the background.
+
+When all clients disconnect from a background daemon, the daemon gracefully shuts itself down after 10 seconds of inactivity to free memory.
+
+**Optional Flags:**
+- `--daemon` — starts directly as the HTTP/SSE daemon in the background on a random port (or the port specified by `--http`), creates the lock file, and waits for clients. Shuts down automatically when idle.
+- `--no-daemon` — starts the classic, standalone in-line mode (a single process handles both the I/O and the Lucene indexing). Useful for one-off tasks.
+- `--http <port>` / `--http-host <host>` — force the daemon to listen on a specific port/host instead of dynamically picking a free one.
 
 ## Adding it to an MCP client
 
-This is a plain stdio MCP server, so any MCP-compatible client works the same way: point it at
-`java` as the command, with `-jar <path-to-jar> <absolute-project-path>` as arguments.
+This is a plain stdio MCP server from the client's perspective, so any MCP-compatible client works the same way: point it at
+`java` as the command, with `-jar <path-to-jar> <absolute-project-path>` as arguments. The proxy-daemon lifecycle is completely transparent.
 
 **Claude Code:**
 

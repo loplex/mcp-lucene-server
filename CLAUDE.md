@@ -4,11 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A standalone MCP server (Kotlin, JSON-RPC 2.0 over stdio) that gives an AI coding agent
+A standalone MCP server (Kotlin, JSON-RPC 2.0) that gives an AI coding agent
 code-search tools backed by Apache Lucene (fulltext) and tree-sitter (AST-aware structural
-search), meant to replace an agent's built-in Grep/Glob/Read for a target project. The server
-takes the target project's absolute path as its one CLI argument and serves any number of
-`tools/call` requests against it — it is not tied to its own source tree.
+search). It uses a Daemon-Proxy architecture: a background HTTP/SSE daemon keeps the heavy Lucene index loaded in memory, while a lightweight proxy bridges the stdio JSON-RPC requests from the MCP client to the daemon.
+The server takes the target project's absolute path as its one CLI argument.
 
 The nine tools it exposes (`search_code`, `grep_code`, `read_file`, `list_files`,
 `find_definition`, `find_references`, `find_implementations`, `outline`, `reindex_code`) are
@@ -78,10 +77,11 @@ the index/watcher, or any tool's wiring.
   a git repo, else falls back to a directory walk pruned by a hardcoded ignore list
   (`isIgnoredDirName`) — keep both in sync if you change what should be excluded.
 
-- `Main.kt` is the whole JSON-RPC surface: a blocking `Scanner(System.in)` loop, one line = one
-  request, synchronous one-response-per-request (no concurrent request handling). Requests with no
-  `id` are notifications and must not get a response (e.g. `notifications/initialized`). Adding a
-  new tool means: a `tools.add(tool(...))` schema entry in `createToolsListResponse`, a
+- `Main.kt` handles the dual Proxy/Daemon modes:
+  - **Proxy Mode** (default): Bridges `stdio` JSON-RPC lines to the daemon via HTTP POST, and streams responses back via HTTP Server-Sent Events (SSE). Spawns the daemon if it's missing, and sends a graceful `DELETE` request upon exit.
+  - **Daemon Mode** (`--daemon`): Runs a lightweight `com.sun.net.httpserver.HttpServer`. Serves `/sse` for streaming responses, `/message` for incoming JSON-RPC lines. Maintains `activeSessions` and shuts itself down after 10 seconds (configurable via `mcp.shutdown.ticks`) of inactivity.
+  - **Standalone Mode** (`--no-daemon`): The classic blocking `Scanner(System.in)` loop for one-off tasks.
+  Adding a new tool means: a `tools.add(tool(...))` schema entry in `createToolsListResponse`, a
   `handleXyz` branch in `handleToolCall`'s `when`, and (per the instructions in
   `CLAUDE_INSTRUCTIONS.md`) a matching description update there for whoever consumes this server.
 

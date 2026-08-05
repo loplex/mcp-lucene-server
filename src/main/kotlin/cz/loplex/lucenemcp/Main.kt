@@ -213,6 +213,19 @@ fun startHttpServer(
                     return@createContext
                 }
                 
+                // Liveness check: verify the SSE connection is still open before heavy processing
+                try {
+                    synchronized(os) {
+                        os.write(": processing\n\n".toByteArray(Charsets.UTF_8))
+                        os.flush()
+                    }
+                } catch (e: Exception) {
+                    activeSessions.remove(sessionId)
+                    exchange.sendResponseHeaders(410, -1) // Gone
+                    exchange.close()
+                    return@createContext
+                }
+                
                 val reader = InputStreamReader(exchange.requestBody, "UTF-8")
                 val requestBody = reader.readText()
                 val responseStr = processRequest(requestBody, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)

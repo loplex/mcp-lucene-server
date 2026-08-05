@@ -203,8 +203,9 @@ fun startHttpServer(
                     os.flush()
                 }
                 
+                val pingInterval = System.getProperty("mcp.ping.interval", "15000").toLong()
                 while (true) {
-                    Thread.sleep(15000)
+                    Thread.sleep(pingInterval)
                     synchronized(os) {
                         os.write(": ping\n\n".toByteArray(Charsets.UTF_8))
                         os.flush()
@@ -266,6 +267,20 @@ fun startHttpServer(
             } finally {
                 exchange.close()
             }
+        } else if (exchange.requestMethod == "DELETE") {
+            try {
+                val query = exchange.requestURI.query ?: ""
+                val sessionId = query.split("&").find { it.startsWith("sessionId=") }?.substringAfter("sessionId=")
+                if (sessionId != null) {
+                    val os = activeSessions.remove(sessionId)
+                    os?.close()
+                }
+                exchange.sendResponseHeaders(204, -1)
+            } catch (e: Exception) {
+                exchange.sendResponseHeaders(500, -1)
+            } finally {
+                exchange.close()
+            }
         } else {
             exchange.sendResponseHeaders(405, -1)
             exchange.close()
@@ -283,14 +298,15 @@ fun startHttpServer(
         daemonPortFile = File(cacheDir, "daemon.port")
         daemonPortFile.writeText(actualPort.toString())
         
+        val shutdownTicks = System.getProperty("mcp.shutdown.ticks", "10").toInt()
         val autoShutdownThread = Thread {
             var emptyTicks = 0
             while (true) {
                 Thread.sleep(1000)
                 if (activeSessions.isEmpty()) {
                     emptyTicks++
-                    if (emptyTicks >= 10) {
-                        System.err.println("No active clients for 10 seconds. Daemon shutting down.")
+                    if (emptyTicks >= shutdownTicks) {
+                        System.err.println("No active clients for $shutdownTicks seconds. Daemon shutting down.")
                         daemonPortFile.delete()
                         System.exit(0)
                     }
@@ -337,8 +353,13 @@ fun startDaemonProcess(targetDir: File) {
     val javaBin = File(File(javaHome, "bin"), "java").absolutePath
     val classpath = System.getProperty("java.class.path")
     val mainClass = "cz.loplex.lucenemcp.MainKt"
-    
-    val pb = ProcessBuilder(javaBin, "-cp", classpath, mainClass, targetDir.absolutePath, "--daemon")
+    val pb = ProcessBuilder(
+        javaBin, 
+        "-Dmcp.ping.interval=${System.getProperty("mcp.ping.interval", "15000")}",
+        "-Dmcp.shutdown.ticks=${System.getProperty("mcp.shutdown.ticks", "10")}",
+        "-cp", classpath, 
+        mainClass, targetDir.absolutePath, "--daemon"
+    )
     pb.redirectError(ProcessBuilder.Redirect.INHERIT)
     pb.redirectOutput(ProcessBuilder.Redirect.DISCARD)
     pb.start()
@@ -406,6 +427,18 @@ fun runProxyMode(targetDir: File) {
     }
     
     val sessionId = sessionIdRef.get()
+    
+    Runtime.getRuntime().addShutdownHook(Thread {
+        try {
+            val delReq = HttpRequest.newBuilder(URI("http://127.0.0.1:$port/message?sessionId=$sessionId"))
+                .DELETE()
+                .build()
+            client.send(delReq, HttpResponse.BodyHandlers.discarding())
+        } catch (e: Exception) {
+            // Ignore
+        }
+    })
+    
     val scanner = Scanner(System.`in`)
     while (scanner.hasNextLine()) {
         val line = scanner.nextLine()

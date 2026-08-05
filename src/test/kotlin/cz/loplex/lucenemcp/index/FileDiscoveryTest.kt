@@ -16,7 +16,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class FileDiscoveryTest {
 
@@ -55,5 +58,20 @@ class FileDiscoveryTest {
             .directory(dir)
             .start()
         assertTrue(process.waitFor(10, TimeUnit.SECONDS), "git init timed out")
+    }
+
+    @Test
+    fun `unpacks and lists files from -sources jar`(@TempDir tempDir: File) {
+        val sourcesJar = File(tempDir, "library-1.0-sources.jar")
+        ZipOutputStream(FileOutputStream(sourcesJar)).use { zout ->
+            val entry = ZipEntry("com/example/TestClass.java")
+            zout.putNextEntry(entry)
+            zout.write("public class TestClass {}".toByteArray())
+            zout.closeEntry()
+        }
+
+        val discovered = listProjectFiles(tempDir, listOf(sourcesJar))
+        
+        assertTrue(discovered.any { it.name == "TestClass.java" }, "Should discover the file unpacked from the sources jar")
     }
 }

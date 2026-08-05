@@ -65,7 +65,7 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes eleven to
    what to read → `outline`.
 9. Need to trace caller/callee relationships → `call_hierarchy`.
 10. Need custom structural search → `search_ast`.
-11. Need to index dependencies/vendor folders dynamically → `add_external_roots`.
+11. Need to index dependencies/vendor folders dynamically → `add_external_roots` (Note: `.m2` dependency paths containing `*-sources.jar` files will be automatically unzipped and parsed on the fly!).
 
 ## Goal
 Keep your active session memory minimal. Run a targeted query first, retrieve only the relevant

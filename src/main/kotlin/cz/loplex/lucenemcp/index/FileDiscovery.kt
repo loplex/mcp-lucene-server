@@ -38,11 +38,55 @@ fun listProjectFiles(root: File, externalRoots: List<File> = emptyList()): List<
         results.addAll(walkWithIgnore(root))
     }
     for (extRoot in externalRoots) {
-        if (extRoot.exists()) {
-            results.addAll(walkWithIgnore(extRoot))
+        if (!extRoot.exists()) continue
+        if (extRoot.isFile && extRoot.name.endsWith("-sources.jar")) {
+            val unpacked = unpackSourcesJar(extRoot)
+            results.addAll(walkWithIgnore(unpacked))
+        } else if (extRoot.isDirectory) {
+            walkWithIgnore(extRoot).forEach { file ->
+                if (file.name.endsWith("-sources.jar")) {
+                    val unpacked = unpackSourcesJar(file)
+                    results.addAll(walkWithIgnore(unpacked))
+                } else {
+                    results.add(file)
+                }
+            }
+        } else {
+            results.add(extRoot)
         }
     }
     return results
+}
+
+private fun unpackSourcesJar(jarFile: File): File {
+    val cacheDir = File(System.getProperty("user.home"), ".cache/mcp-lucene-server/unpacked-jars")
+    // Use absolute path hash to avoid collisions
+    val targetDir = File(cacheDir, Math.abs(jarFile.absolutePath.hashCode()).toString() + "_" + jarFile.name)
+    if (targetDir.exists() && targetDir.lastModified() >= jarFile.lastModified()) {
+        return targetDir
+    }
+    targetDir.mkdirs()
+    try {
+        java.util.zip.ZipFile(jarFile).use { zip ->
+            zip.entries().asSequence().forEach { entry ->
+                val outFile = File(targetDir, entry.name)
+                if (entry.isDirectory) {
+                    outFile.mkdirs()
+                } else {
+                    outFile.parentFile.mkdirs()
+                    zip.getInputStream(entry).use { input ->
+                        outFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            }
+        }
+        targetDir.setLastModified(System.currentTimeMillis())
+    } catch (e: Exception) {
+        System.err.println("Failed to unpack jar: ${jarFile.absolutePath}")
+    }
+    return targetDir
 }
 
 private fun tryGitLsFiles(root: File): List<File>? {

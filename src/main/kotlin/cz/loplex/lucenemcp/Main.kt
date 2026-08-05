@@ -240,7 +240,8 @@ fun startHttpServer(
     
     server.executor = java.util.concurrent.Executors.newCachedThreadPool()
     server.start()
-    System.err.println("MCP Lucene Server listening for SSE on http://${httpOptions.host}:${httpOptions.port}/sse")
+    val actualPort = server.address.port
+    System.err.println("MCP Lucene Server listening for SSE on http://${httpOptions.host}:$actualPort/sse")
     
     // Block the main thread since the server runs in a daemon thread
     Thread.currentThread().join()

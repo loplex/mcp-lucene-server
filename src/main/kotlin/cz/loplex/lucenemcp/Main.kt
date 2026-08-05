@@ -71,9 +71,19 @@ fun parseCliOptions(args: Array<String>): CliOptions {
 }
 
 fun main(args: Array<String>) {
-    if (args.isEmpty()) {
-        System.err.println("Error: missing required argument <project-directory>. Usage: mcp-lucene-server <absolute-path-to-project> [--http <port>] [--http-host <host>] [--daemon] [--no-daemon]")
-        exitProcess(1)
+    if (args.isEmpty() || args.contains("--help") || args.contains("-h")) {
+        System.err.println("""
+            Usage: mcp-lucene-server <absolute-path-to-project> [options]
+            
+            Options:
+              --http <port>           Run as an HTTP SSE daemon listening on the specified port.
+              --http-host <host>      Host to bind the HTTP server to (default: 127.0.0.1).
+              --daemon                Run as a daemon and let the OS assign a random port. The port is printed to stdout.
+              --no-daemon             Force running in inline mode (stdin/stdout) without spawning a background daemon.
+              --external-roots <dirs> Comma-separated list of absolute paths to index as external dependencies.
+              -h, --help              Show this help message.
+        """.trimIndent())
+        exitProcess(if (args.contains("--help") || args.contains("-h")) 0 else 1)
     }
 
     val targetDir = File(args[0])

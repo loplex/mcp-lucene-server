@@ -9,8 +9,8 @@ code-search tools backed by Apache Lucene (fulltext) and tree-sitter (AST-aware 
 search). It uses a Daemon-Proxy architecture: a background HTTP/SSE daemon keeps the heavy Lucene index loaded in memory, while a lightweight proxy bridges the stdio JSON-RPC requests from the MCP client to the daemon.
 The server takes the target project's absolute path as its one CLI argument.
 
-The nine tools it exposes (`search_code`, `grep_code`, `read_file`, `list_files`,
-`find_definition`, `find_references`, `find_implementations`, `outline`, `reindex_code`) are
+The ten tools it exposes (`search_code`, `grep_code`, `read_file`, `list_files`,
+`find_definition`, `find_references`, `find_implementations`, `outline`, `search_ast`, `call_hierarchy`, `reindex_code`) are
 documented for consumers in `CLAUDE_INSTRUCTIONS.md` — read that file for behavior/semantics: this
 file is about building and maintaining the server itself.
 
@@ -18,6 +18,7 @@ file is about building and maintaining the server itself.
 
 ```bash
 mvn package                    # builds the shaded (fat) jar: target/mcp-lucene-server-1.0-SNAPSHOT.jar
+mvn package -Pnative           # builds the GraalVM Native Image binary: target/mcp-lucene-server
 mvn test                       # JUnit 5 unit tests
 mvn test -Dtest=ClassName                       # single test class
 mvn test -Dtest=ClassName#methodName            # single test method
@@ -25,7 +26,9 @@ mvn test -Dtest=ClassName#methodName            # single test method
 e2e/run.sh                     # end-to-end test against the packaged jar (reuses existing jar)
 e2e/run.sh --build             # same, but rebuilds the jar first (mvn -q package -DskipTests)
 
-java -jar target/mcp-lucene-server-1.0-SNAPSHOT.jar /absolute/path/to/target-project
+java -jar target/mcp-lucene-server-1.0-SNAPSHOT.jar /absolute/path/to/target-project [--external-roots /path/to/node_modules]
+# or use the native binary:
+./target/mcp-lucene-server /absolute/path/to/target-project
 ```
 
 The e2e script drives the real JSON-RPC/stdio protocol against a disposable git fixture (built in
@@ -81,6 +84,8 @@ the index/watcher, or any tool's wiring.
   - **Proxy Mode** (default): Bridges `stdio` JSON-RPC lines to the daemon via HTTP POST, and streams responses back via HTTP Server-Sent Events (SSE). Spawns the daemon if it's missing, and sends a graceful `DELETE` request upon exit.
   - **Daemon Mode** (`--daemon`): Runs a lightweight `com.sun.net.httpserver.HttpServer`. Serves `/sse` for streaming responses, `/message` for incoming JSON-RPC lines. Maintains `activeSessions` and shuts itself down after 10 seconds (configurable via `mcp.shutdown.ticks`) of inactivity.
   - **Standalone Mode** (`--no-daemon`): The classic blocking `Scanner(System.in)` loop for one-off tasks.
+  - `--external-roots <dirs>`: Comma-separated absolute paths to index as external dependencies (e.g. `node_modules` or `maven cache`). These paths are passed to `listProjectFiles` and are searchable.
+  - `--help` (`-h`): Shows usage options.
   Adding a new tool means: a `tools.add(tool(...))` schema entry in `createToolsListResponse`, a
   `handleXyz` branch in `handleToolCall`'s `when`, and (per the instructions in
   `CLAUDE_INSTRUCTIONS.md`) a matching description update there for whoever consumes this server.

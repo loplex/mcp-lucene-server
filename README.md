@@ -21,12 +21,14 @@ Communication is strictly JSON-RPC 2.0 over standard I/O for the MCP client, but
   class/interface/trait.
 - **`outline`** — lists every symbol a file defines, in source order, without reading the whole
   file.
+- **`search_ast`** — runs raw tree-sitter queries against all files of a specific language for structural search.
+- **`call_hierarchy`** — finds incoming or outgoing function calls (caller/callee) for a symbol using AST analysis.
 - **`read_file`** — reads a file or line range.
 - **`list_files`** — lists project files by glob pattern (respects `.gitignore`).
 - **`reindex_code`** — forces an incremental resync of the `search_code` index.
 
 Supported languages for the tree-sitter-backed tools: Kotlin, Java, TypeScript/TSX, JavaScript,
-Python, Go, Rust (`find_implementations` excludes Go — its interfaces are structural, with no
+Python, Go, Rust, C, C++, C#, PHP, Ruby, Swift (`find_implementations` excludes Go — its interfaces are structural, with no
 `extends`/`implements` clause to search for).
 
 Full tool semantics, field syntax, and tool-selection guidance are documented in
@@ -46,10 +48,20 @@ mvn package
 
 Produces a self-contained fat jar at `target/mcp-lucene-server-1.0-SNAPSHOT.jar`.
 
+To build a GraalVM **Native Image** (instant startup, no JRE required):
+
+```bash
+mvn package -Pnative
+```
+
+Produces a native executable at `target/mcp-lucene-server`.
+
 ## Run
 
 ```bash
 java -jar target/mcp-lucene-server-1.0-SNAPSHOT.jar /absolute/path/to/target-project
+# or use the native binary:
+./target/mcp-lucene-server /absolute/path/to/target-project
 ```
 
 The target project directory is a required argument — the server indexes and searches that
@@ -65,6 +77,8 @@ When all clients disconnect from a background daemon, the daemon gracefully shut
 - `--daemon` — starts directly as the HTTP/SSE daemon in the background on a random port (or the port specified by `--http`), creates the lock file, and waits for clients. Shuts down automatically when idle.
 - `--no-daemon` — starts the classic, standalone in-line mode (a single process handles both the I/O and the Lucene indexing). Useful for one-off tasks.
 - `--http <port>` / `--http-host <host>` — force the daemon to listen on a specific port/host instead of dynamically picking a free one.
+- `--external-roots <dirs>` — a comma-separated list of absolute paths to index as external dependencies (e.g. `/project/node_modules`).
+- `--help` (`-h`) — shows the usage options.
 
 ## Adding it to an MCP client
 

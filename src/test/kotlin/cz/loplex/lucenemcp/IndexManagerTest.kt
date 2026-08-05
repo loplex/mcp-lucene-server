@@ -165,4 +165,43 @@ class IndexManagerTest {
 
         assertEquals(1L, hitCountFor(second, "content:SurvivesRestart"))
     }
+
+    @Test
+    fun `retains and removes externalRoots automatically across restarts`(@TempDir tempDir: File, @TempDir extDir: File) {
+        val rootApp = File(tempDir, "App.kt").apply { writeText("fun rootApp() {}") }
+        val extApp = File(extDir, "ExtApp.kt").apply { writeText("fun extApp() {}") }
+
+        // 1. Initial start with external roots
+        val manager1 = IndexManager(tempDir, analyzer, listOf(extDir))
+        rootsToClean.add(tempDir)
+        managersToClose.add(manager1)
+        val result1 = manager1.sync()
+        assertEquals(2, result1.added)
+        assertEquals(1L, hitCountFor(manager1, "content:rootApp"))
+        assertEquals(1L, hitCountFor(manager1, "content:extApp"))
+
+        // 2. Add another external root dynamically
+        val extDir2 = File(tempDir.parentFile, "ext2").apply { mkdir() }
+        File(extDir2, "ExtApp2.kt").writeText("fun extApp2() {}")
+        manager1.externalRoots = manager1.externalRoots + extDir2
+        val result2 = manager1.sync()
+        assertEquals(1, result2.added)
+        assertEquals(1L, hitCountFor(manager1, "content:extApp2"))
+
+        // Close to flush everything to disk
+        manager1.close()
+        managersToClose.remove(manager1)
+
+        // 3. Restart daemon without external roots
+        val manager2 = IndexManager(tempDir, analyzer, emptyList())
+        managersToClose.add(manager2)
+        val result3 = manager2.sync()
+        // It should delete the two external files (ExtApp.kt and ExtApp2.kt)
+        assertEquals(2, result3.deleted)
+        assertEquals(1L, hitCountFor(manager2, "content:rootApp"))
+        assertEquals(0L, hitCountFor(manager2, "content:extApp"))
+        assertEquals(0L, hitCountFor(manager2, "content:extApp2"))
+        
+        extDir2.deleteRecursively()
+    }
 }

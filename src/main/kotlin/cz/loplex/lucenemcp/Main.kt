@@ -203,7 +203,7 @@ fun startHttpServer(
                     os.flush()
                 }
                 
-                val pingInterval = System.getProperty("mcp.ping.interval", "15000").toLong()
+                val pingInterval = (System.getProperty("mcp.ping.interval") ?: System.getenv("mcp.ping.interval") ?: "15000").toLong()
                 while (true) {
                     Thread.sleep(pingInterval)
                     synchronized(os) {
@@ -302,7 +302,7 @@ fun startHttpServer(
             daemonPortFile.delete()
         })
         
-        val shutdownTicks = System.getProperty("mcp.shutdown.ticks", "10").toInt()
+        val shutdownTicks = (System.getProperty("mcp.shutdown.ticks") ?: System.getenv("mcp.shutdown.ticks") ?: "10").toInt()
         val autoShutdownThread = Thread {
             var emptyTicks = 0
             while (true) {
@@ -352,17 +352,35 @@ fun isDaemonAlive(port: Int): Boolean {
 }
 
 fun startDaemonProcess(targetDir: File) {
-    val javaHome = System.getProperty("java.home")
-    val javaBin = File(File(javaHome, "bin"), "java").absolutePath
-    val classpath = System.getProperty("java.class.path")
-    val mainClass = "cz.loplex.lucenemcp.MainKt"
-    val pb = ProcessBuilder(
-        javaBin, 
-        "-Dmcp.ping.interval=${System.getProperty("mcp.ping.interval", "15000")}",
-        "-Dmcp.shutdown.ticks=${System.getProperty("mcp.shutdown.ticks", "10")}",
-        "-cp", classpath, 
-        mainClass, targetDir.absolutePath, "--daemon"
-    )
+    val isNativeImage = System.getProperty("org.graalvm.nativeimage.imagecode") != null
+    val currentCommand = ProcessHandle.current().info().command().orElse(null)
+
+    val pb = if (isNativeImage && currentCommand != null) {
+        ProcessBuilder(
+            currentCommand,
+            targetDir.absolutePath, "--daemon"
+        )
+    } else {
+        val javaHome = System.getProperty("java.home")
+        val javaBin = File(File(javaHome, "bin"), "java").absolutePath
+        val classpath = System.getProperty("java.class.path")
+        val mainClass = "cz.loplex.lucenemcp.MainKt"
+        ProcessBuilder(
+            javaBin, 
+            "-Dmcp.ping.interval=${System.getProperty("mcp.ping.interval", "15000")}",
+            "-Dmcp.shutdown.ticks=${System.getProperty("mcp.shutdown.ticks", "10")}",
+            "-cp", classpath, 
+            mainClass, targetDir.absolutePath, "--daemon"
+        )
+    }
+    
+    // Pass along properties if native image (using GraalVM's -D logic or environment if needed), 
+    // but default env is inherited so it's fine. For Java, we passed -D above.
+    if (isNativeImage) {
+        pb.environment()["mcp.ping.interval"] = System.getProperty("mcp.ping.interval", "15000")
+        pb.environment()["mcp.shutdown.ticks"] = System.getProperty("mcp.shutdown.ticks", "10")
+    }
+
     pb.redirectError(ProcessBuilder.Redirect.INHERIT)
     pb.redirectOutput(ProcessBuilder.Redirect.DISCARD)
     pb.start()

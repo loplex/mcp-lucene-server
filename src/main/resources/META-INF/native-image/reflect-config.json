@@ -1,0 +1,517 @@
+[
+{
+  "name":"[Lorg.apache.lucene.search.TermStatistics;"
+},
+{
+  "name":"[Lorg.apache.lucene.util.AttributeSource;"
+},
+{
+  "name":"[Lorg.apache.lucene.util.packed.PackedInts$Reader;"
+},
+{
+  "name":"com.sun.crypto.provider.AESCipher$General",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.ARCFOURCipher",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.ChaCha20Cipher$ChaCha20Poly1305",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.DESCipher",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.DESedeCipher",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.DHParameters",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.GaloisCounterMode$AESGCM",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.crypto.provider.TlsMasterSecretGenerator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.management.HotSpotDiagnosticMXBean",
+  "methods":[{"name":"getVMOption","parameterTypes":["java.lang.String"] }]
+},
+{
+  "name":"com.sun.management.VMOption",
+  "methods":[{"name":"getValue","parameterTypes":[] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.AstCacheTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"an unparsable file is not left cached","parameterTypes":["java.io.File"] }, {"name":"prune drops entries for files no longer part of the project","parameterTypes":["java.io.File"] }, {"name":"reparses after the file is modified","parameterTypes":["java.io.File"] }, {"name":"returns the same parsed instance when the file is unchanged","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.FileDiscoveryTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"git repo respects gitignore via git ls-files","parameterTypes":["java.io.File"] }, {"name":"non-git directory falls back to walk pruning known noise directories","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.FindDefinitionToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"a shared AstCache still reflects file edits across calls","parameterTypes":["java.io.File"] }, {"name":"a symbol only mentioned in a comment or string literal is not a definition","parameterTypes":["java.io.File"] }, {"name":"blank symbol is a clean error","parameterTypes":["java.io.File"] }, {"name":"finds a Go function and a Rust struct definition","parameterTypes":["java.io.File"] }, {"name":"finds a Java method definition, not an unrelated mention","parameterTypes":["java.io.File"] }, {"name":"finds a Kotlin class and function definition, not a call site","parameterTypes":["java.io.File"] }, {"name":"finds a Python function and class definition","parameterTypes":["java.io.File"] }, {"name":"maxMatches caps the number of returned definitions","parameterTypes":["java.io.File"] }, {"name":"non-identifier symbol is rejected with a clean error","parameterTypes":["java.io.File"] }, {"name":"unsupported extensions are silently skipped","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.FindImplementationsToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"Go structural interfaces are not supported","parameterTypes":["java.io.File"] }, {"name":"a Kotlin inherent (no supertype) class is not reported as implementing anything","parameterTypes":["java.io.File"] }, {"name":"a shared AstCache still reflects file edits across calls","parameterTypes":["java.io.File"] }, {"name":"a symbol only mentioned in a comment or string is not an implementer","parameterTypes":["java.io.File"] }, {"name":"blank type is a clean error","parameterTypes":["java.io.File"] }, {"name":"finds Python multiple inheritance","parameterTypes":["java.io.File"] }, {"name":"finds a Java superclass and interface separately","parameterTypes":["java.io.File"] }, {"name":"finds a JavaScript extends clause (no implements concept in JS)","parameterTypes":["java.io.File"] }, {"name":"finds a Kotlin superclass and interface implementer separately","parameterTypes":["java.io.File"] }, {"name":"finds a Rust trait impl but not an inherent impl","parameterTypes":["java.io.File"] }, {"name":"finds a TypeScript extends and implements clause separately, not JS's plain extends","parameterTypes":["java.io.File"] }, {"name":"maxMatches caps the number of returned implementations","parameterTypes":["java.io.File"] }, {"name":"non-identifier type is rejected with a clean error","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.FindReferencesToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"Go qualified selector access is kept across packages, but a same-named struct field or literal key is not","parameterTypes":["java.io.File"] }, {"name":"Python import path resolution drops a bare hit whose relative import resolves elsewhere","parameterTypes":["java.io.File"] }, {"name":"Python import path resolution keeps a bare hit whose absolute import resolves to the real defining file","parameterTypes":["java.io.File"] }, {"name":"Rust qualified field access is kept without a use import, but a same-named struct field or literal key is not","parameterTypes":["java.io.File"] }, {"name":"TS bare package specifier is unresolvable and falls back to the permissive name-mention check","parameterTypes":["java.io.File"] }, {"name":"TS import path resolution drops a bare hit whose import resolves elsewhere, not just to any file mentioning the name","parameterTypes":["java.io.File"] }, {"name":"TS import path resolution keeps a bare hit whose import resolves to the real defining file","parameterTypes":["java.io.File"] }, {"name":"TS qualified member access is kept in a non-candidate file, but a same-named object literal key is not","parameterTypes":["java.io.File"] }, {"name":"a shared AstCache still reflects file edits across calls","parameterTypes":["java.io.File"] }, {"name":"a symbol only mentioned in a comment or string literal is not a reference","parameterTypes":["java.io.File"] }, {"name":"bare reference in an unrelated, unimported, different-package file is filtered out","parameterTypes":["java.io.File"] }, {"name":"bare reference is kept when the file imports the symbol by name","parameterTypes":["java.io.File"] }, {"name":"bare reference is kept when the file shares the defining package, no import needed","parameterTypes":["java.io.File"] }, {"name":"blank symbol is a clean error","parameterTypes":["java.io.File"] }, {"name":"finds a Java method call site","parameterTypes":["java.io.File"] }, {"name":"finds real usages of a Kotlin class, classified as definition, call and type","parameterTypes":["java.io.File"] }, {"name":"maxMatches caps the number of returned references","parameterTypes":["java.io.File"] }, {"name":"no matches gives a clean message","parameterTypes":["java.io.File"] }, {"name":"non-identifier symbol is rejected with a clean error","parameterTypes":["java.io.File"] }, {"name":"qualified member-style access is never filtered out, even in an unrelated package","parameterTypes":["java.io.File"] }, {"name":"without any repo definition, filtering is disabled so external symbols still surface","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.GlobToRegexTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"double star matches across path segments","parameterTypes":[] }, {"name":"question mark matches exactly one character excluding slash","parameterTypes":[] }, {"name":"special regex characters in the glob are escaped literally","parameterTypes":[] }, {"name":"star matches within a single path segment only","parameterTypes":[] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.GrepToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"case-insensitive search matches differently-cased lines","parameterTypes":["java.io.File"] }, {"name":"context lines surround the match","parameterTypes":["java.io.File"] }, {"name":"count mode reports per-file and total match counts","parameterTypes":["java.io.File"] }, {"name":"files_with_matches mode lists only paths","parameterTypes":["java.io.File"] }, {"name":"invalid regex returns a readable error instead of throwing","parameterTypes":["java.io.File"] }, {"name":"literal search is case-sensitive by default","parameterTypes":["java.io.File"] }, {"name":"no matches returns an explicit message","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.IndexManagerTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"deleting a file after initial sync removes it from the index","parameterTypes":["java.io.File"] }, {"name":"index survives a server restart without a full rebuild","parameterTypes":["java.io.File"] }, {"name":"initial sync indexes every discoverable file","parameterTypes":["java.io.File"] }, {"name":"modifying a file after initial sync is picked up as an update","parameterTypes":["java.io.File"] }, {"name":"phrase and proximity queries match, proving token positions survive indexing","parameterTypes":["java.io.File"] }, {"name":"re-syncing with no filesystem changes touches nothing","parameterTypes":["java.io.File"] }, {"name":"tearDown","parameterTypes":[] }, {"name":"words field does not match a partial camelCase word part, unlike content","parameterTypes":["java.io.File"] }, {"name":"words field finds two identifiers within proximity, unlike content on the same text","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.IndexWatcherTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"a file created inside a newly created subdirectory is watched too","parameterTypes":["java.io.File"] }, {"name":"creating a new file gets picked up without an explicit sync call","parameterTypes":["java.io.File"] }, {"name":"deleting a file gets picked up without an explicit sync call","parameterTypes":["java.io.File"] }, {"name":"modifying a file gets picked up without an explicit sync call","parameterTypes":["java.io.File"] }, {"name":"tearDown","parameterTypes":[] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.ListFilesToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"glob pattern filters by extension","parameterTypes":["java.io.File"] }, {"name":"lists all files when no pattern is given","parameterTypes":["java.io.File"] }, {"name":"no matches produces an explicit message","parameterTypes":["java.io.File"] }, {"name":"result is truncated to the requested limit","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.OutlineToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"a Python class and its methods are listed","parameterTypes":["java.io.File"] }, {"name":"a file with no definitions reports no symbols","parameterTypes":["java.io.File"] }, {"name":"a shared AstCache still reflects file edits across calls","parameterTypes":["java.io.File"] }, {"name":"a symbol only mentioned in a comment or string is not a definition","parameterTypes":["java.io.File"] }, {"name":"lists a Kotlin class's members in source order","parameterTypes":["java.io.File"] }, {"name":"missing file produces an explicit error","parameterTypes":["java.io.File"] }, {"name":"oversized files are rejected instead of being parsed","parameterTypes":["java.io.File"] }, {"name":"path escaping the project root is rejected","parameterTypes":["java.io.File"] }, {"name":"unsupported extension is a clean error, not a crash","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.ProxyDaemonTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"test proxy daemon auto-start and basic communication","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"cz.loplex.lucenemcp.ReadFileToolTest",
+  "allDeclaredFields":true,
+  "allDeclaredClasses":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"an empty range after clamping produces an explicit message","parameterTypes":["java.io.File"] }, {"name":"missing file produces an explicit error","parameterTypes":["java.io.File"] }, {"name":"oversized files are rejected instead of being read fully","parameterTypes":["java.io.File"] }, {"name":"path escaping the project root is rejected","parameterTypes":["java.io.File"] }, {"name":"reads a specific line range","parameterTypes":["java.io.File"] }, {"name":"reads whole file with line numbers by default","parameterTypes":["java.io.File"] }]
+},
+{
+  "name":"java.lang.Class",
+  "allDeclaredFields":true
+},
+{
+  "name":"java.lang.Integer",
+  "allDeclaredFields":true
+},
+{
+  "name":"java.lang.Long",
+  "allDeclaredFields":true
+},
+{
+  "name":"java.lang.Number",
+  "allDeclaredFields":true
+},
+{
+  "name":"java.lang.Object",
+  "allDeclaredFields":true
+},
+{
+  "name":"java.lang.String",
+  "allDeclaredFields":true
+},
+{
+  "name":"java.lang.Thread",
+  "fields":[{"name":"threadLocalRandomProbe"}]
+},
+{
+  "name":"java.lang.management.ManagementFactory",
+  "methods":[{"name":"getPlatformMXBean","parameterTypes":["java.lang.Class"] }]
+},
+{
+  "name":"java.security.AlgorithmParametersSpi"
+},
+{
+  "name":"java.security.KeyStoreSpi"
+},
+{
+  "name":"java.security.SecureRandomParameters"
+},
+{
+  "name":"java.util.concurrent.ForkJoinTask",
+  "fields":[{"name":"aux"}, {"name":"status"}]
+},
+{
+  "name":"java.util.concurrent.atomic.AtomicBoolean",
+  "fields":[{"name":"value"}]
+},
+{
+  "name":"java.util.concurrent.atomic.AtomicReference",
+  "fields":[{"name":"value"}]
+},
+{
+  "name":"java.util.concurrent.atomic.Striped64",
+  "fields":[{"name":"base"}, {"name":"cellsBusy"}]
+},
+{
+  "name":"javax.security.auth.x500.X500Principal",
+  "fields":[{"name":"thisX500Name"}],
+  "methods":[{"name":"<init>","parameterTypes":["sun.security.x509.X500Name"] }]
+},
+{
+  "name":"jdk.internal.misc.Unsafe"
+},
+{
+  "name":"kotlin.Metadata",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"kotlin.annotation.MustBeDocumented",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"kotlin.annotation.Retention",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"kotlin.annotation.Target",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"org.apache.lucene.analysis.tokenattributes.KeywordAttributeImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.lucene.analysis.tokenattributes.PackedTokenAttributeImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.lucene.index.ConcurrentMergeScheduler"
+},
+{
+  "name":"org.apache.lucene.index.DocsWithFieldSet",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.index.IndexWriter"
+},
+{
+  "name":"org.apache.lucene.index.SegmentReader"
+},
+{
+  "name":"org.apache.lucene.index.Term",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.search.BooleanQuery",
+  "methods":[{"name":"rewrite","parameterTypes":["org.apache.lucene.index.IndexReader"] }, {"name":"rewrite","parameterTypes":["org.apache.lucene.search.IndexSearcher"] }]
+},
+{
+  "name":"org.apache.lucene.search.BoostAttributeImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.lucene.search.DocIdSet",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.search.PhraseQuery",
+  "methods":[{"name":"rewrite","parameterTypes":["org.apache.lucene.index.IndexReader"] }, {"name":"rewrite","parameterTypes":["org.apache.lucene.search.IndexSearcher"] }]
+},
+{
+  "name":"org.apache.lucene.search.Query",
+  "methods":[{"name":"rewrite","parameterTypes":["org.apache.lucene.index.IndexReader"] }, {"name":"rewrite","parameterTypes":["org.apache.lucene.search.IndexSearcher"] }]
+},
+{
+  "name":"org.apache.lucene.search.TermQuery",
+  "methods":[{"name":"rewrite","parameterTypes":["org.apache.lucene.index.IndexReader"] }, {"name":"rewrite","parameterTypes":["org.apache.lucene.search.IndexSearcher"] }]
+},
+{
+  "name":"org.apache.lucene.store.DataOutput",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.BitSet",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.ByteBlockPool",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.BytesRef",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.BytesRefBlockPool",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.BytesRefHash",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.FixedBitSet",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.FrequencyTrackingRingBuffer",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.FrequencyTrackingRingBuffer$IntBag",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.LongValues",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.fst.FST",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.fst.GrowableByteArrayDataOutput",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.fst.OffHeapFSTStore",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.packed.DeltaPackedLongValues",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.packed.DeltaPackedLongValues$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.packed.DirectMonotonicReader",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.packed.DirectMonotonicReader$Meta",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.packed.PackedLongValues",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.lucene.util.packed.PackedLongValues$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.maven.surefire.junitplatform.JUnitPlatformProvider",
+  "methods":[{"name":"<init>","parameterTypes":["org.apache.maven.surefire.api.provider.ProviderParameters"] }]
+},
+{
+  "name":"org.apiguardian.api.API",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"org.junit.internal.AssumptionViolatedException"
+},
+{
+  "name":"org.junit.jupiter.api.Test",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"org.junit.jupiter.api.io.TempDir",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"org.junit.platform.commons.annotation.Testable",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"org.junit.platform.launcher.LauncherSession",
+  "methods":[{"name":"getLauncher","parameterTypes":[] }]
+},
+{
+  "name":"org.junit.platform.launcher.core.LauncherFactory",
+  "methods":[{"name":"openSession","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.pkcs12.PKCS12KeyStore",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.pkcs12.PKCS12KeyStore$DualFormatPKCS12",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.DSA$SHA224withDSA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.DSA$SHA256withDSA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.NativePRNG",
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"<init>","parameterTypes":["java.security.SecureRandomParameters"] }]
+},
+{
+  "name":"sun.security.provider.SHA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA2$SHA224",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA2$SHA256",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA5$SHA384",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA5$SHA512",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.X509Factory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.rsa.PSSParameters",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.rsa.RSAKeyFactory$Legacy",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.rsa.RSAPSSSignature",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.rsa.RSASignature$SHA224withRSA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.ssl.KeyManagerFactoryImpl$SunX509",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.ssl.SSLContextImpl$DefaultSSLContext",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.ssl.TrustManagerFactoryImpl$PKIXFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.x509.AuthorityInfoAccessExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.AuthorityKeyIdentifierExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.BasicConstraintsExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.CRLDistributionPointsExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.CertificatePoliciesExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.ExtendedKeyUsageExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.KeyUsageExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.NetscapeCertTypeExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.PrivateKeyUsageExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.SubjectKeyIdentifierExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+}
+]

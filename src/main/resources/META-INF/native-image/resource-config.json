@@ -1,0 +1,47 @@
+{
+  "resources":{
+  "includes":[{
+    "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.net.spi.URLStreamHandlerProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.nio.channels.spi.SelectorProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.time.zone.ZoneRulesProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.apache.lucene.codecs.Codec\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.apache.lucene.codecs.PostingsFormat\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.apache.maven.surefire.spi.MasterProcessChannelProcessorFactory\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.junit.platform.engine.TestEngine\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.junit.platform.launcher.LauncherDiscoveryListener\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.junit.platform.launcher.LauncherSessionListener\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.junit.platform.launcher.PostDiscoveryFilter\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.junit.platform.launcher.TestExecutionListener\\E"
+  }, {
+    "pattern":"\\Qjunit-platform.properties\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-go.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-java.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-javascript.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-kotlin.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-python.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-rust.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter-typescript.so\\E"
+  }, {
+    "pattern":"\\Qlib/x86_64-linux-gnu-tree-sitter.so\\E"
+  }]},
+  "bundles":[]
+}

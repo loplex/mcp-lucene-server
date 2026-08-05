@@ -15,7 +15,12 @@ import java.io.File
 import java.io.InputStreamReader
 import java.io.StringReader
 import java.net.InetSocketAddress
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.util.Scanner
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.system.exitProcess
 import com.sun.net.httpserver.HttpServer
 
@@ -27,12 +32,39 @@ private const val DEFAULT_GREP_LIMIT = 200
 private const val DEFAULT_LIST_LIMIT = 200
 private const val DEFAULT_HTTP_HOST = "127.0.0.1"
 
-/** Parsed `--http <port>` / `--http-host <host>` CLI flags — see [parseHttpOptions]. */
 data class HttpOptions(val host: String, val port: Int)
+
+data class CliOptions(
+    val httpOptions: HttpOptions?,
+    val isDaemon: Boolean,
+    val noDaemon: Boolean
+)
+
+fun parseCliOptions(args: Array<String>): CliOptions {
+    var port: Int? = null
+    var host = DEFAULT_HTTP_HOST
+    var isDaemon = false
+    var noDaemon = false
+    var i = 1
+    while (i < args.size) {
+        when (args[i]) {
+            "--http" -> if (i + 1 < args.size) port = args[++i].toIntOrNull()
+            "--http-host" -> if (i + 1 < args.size) host = args[++i]
+            "--daemon" -> isDaemon = true
+            "--no-daemon" -> noDaemon = true
+        }
+        i++
+    }
+    return CliOptions(
+        httpOptions = if (port != null) HttpOptions(host, port) else null,
+        isDaemon = isDaemon,
+        noDaemon = noDaemon
+    )
+}
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
-        System.err.println("Error: missing required argument <project-directory>. Usage: mcp-lucene-server <absolute-path-to-project> [--http <port>] [--http-host <host>]")
+        System.err.println("Error: missing required argument <project-directory>. Usage: mcp-lucene-server <absolute-path-to-project> [--http <port>] [--http-host <host>] [--daemon] [--no-daemon]")
         exitProcess(1)
     }
 
@@ -42,11 +74,14 @@ fun main(args: Array<String>) {
         exitProcess(1)
     }
 
-    val httpOptions = parseHttpOptions(args)
+    val cliOptions = parseCliOptions(args)
+
+    if (!cliOptions.isDaemon && cliOptions.httpOptions == null && !cliOptions.noDaemon) {
+        runProxyMode(targetDir)
+        return
+    }
 
     val gson = Gson()
-    // "words" gets its own analyzer for real word-distance phrase/proximity queries (see
-    // WordAnalyzer's kdoc) — every other field, including the default "content", keeps CodeAnalyzer.
     val analyzer: Analyzer = PerFieldAnalyzerWrapper(CodeAnalyzer(), mapOf("words" to WordAnalyzer()))
 
     System.err.println("Opening persistent index for: ${targetDir.absolutePath}")
@@ -68,43 +103,33 @@ fun main(args: Array<String>) {
         indexManager.close()
     })
 
-    if (httpOptions == null) {
-        val scanner = Scanner(System.`in`)
-        System.err.println("MCP Lucene Server listening on stdin...")
-
-        while (scanner.hasNextLine()) {
-            val line = scanner.nextLine()
-            val responseStr = processRequest(line, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
-            if (responseStr != null) {
-                println(responseStr)
-                System.out.flush()
-            }
-        }
+    if (cliOptions.httpOptions != null || cliOptions.isDaemon) {
+        val options = cliOptions.httpOptions ?: HttpOptions(DEFAULT_HTTP_HOST, 0)
+        startHttpServer(options, cliOptions.isDaemon, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
     } else {
-        startHttpServer(httpOptions, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
+        runInlineMode(gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
     }
 }
 
-fun parseHttpOptions(args: Array<String>): HttpOptions? {
-    var port: Int? = null
-    var host = DEFAULT_HTTP_HOST
-    var i = 1
-    while (i < args.size) {
-        when (args[i]) {
-            "--http" -> {
-                if (i + 1 < args.size) {
-                    port = args[++i].toIntOrNull()
-                }
-            }
-            "--http-host" -> {
-                if (i + 1 < args.size) {
-                    host = args[++i]
-                }
-            }
+fun runInlineMode(
+    gson: Gson,
+    indexManager: IndexManager,
+    analyzer: Analyzer,
+    targetDir: File,
+    watcherStarted: Boolean,
+    astCache: AstCache
+) {
+    val scanner = Scanner(System.`in`)
+    System.err.println("MCP Lucene Server listening on stdin...")
+
+    while (scanner.hasNextLine()) {
+        val line = scanner.nextLine()
+        val responseStr = processRequest(line, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
+        if (responseStr != null) {
+            println(responseStr)
+            System.out.flush()
         }
-        i++
     }
-    return if (port != null) HttpOptions(host, port) else null
 }
 
 fun processRequest(
@@ -127,7 +152,6 @@ fun processRequest(
             return null
         }
 
-        // JSON-RPC notifications (e.g. "notifications/initialized") carry no "id" and must not be answered.
         if (id == null) {
             System.err.println("Received notification: $method")
             return null
@@ -149,6 +173,7 @@ fun processRequest(
 
 fun startHttpServer(
     httpOptions: HttpOptions,
+    isDaemon: Boolean,
     gson: Gson,
     indexManager: IndexManager,
     analyzer: Analyzer,
@@ -164,22 +189,20 @@ fun startHttpServer(
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.responseHeaders.add("Cache-Control", "no-cache")
             exchange.responseHeaders.add("Connection", "keep-alive")
-            exchange.sendResponseHeaders(200, 0) // 0 means chunked transfer
+            exchange.sendResponseHeaders(200, 0)
             
             val sessionId = java.util.UUID.randomUUID().toString()
             val os = exchange.responseBody
             activeSessions[sessionId] = os
             
             try {
-                // Send the required "endpoint" event so the client knows where to POST
-                val endpointUrl = "http://${httpOptions.host}:${httpOptions.port}/message?sessionId=$sessionId"
+                val endpointUrl = "http://${httpOptions.host}:${server.address.port}/message?sessionId=$sessionId"
                 val event = "event: endpoint\ndata: $endpointUrl\n\n"
                 synchronized(os) {
                     os.write(event.toByteArray(Charsets.UTF_8))
                     os.flush()
                 }
                 
-                // Keep connection open and detect disconnects via periodic pings
                 while (true) {
                     Thread.sleep(15000)
                     synchronized(os) {
@@ -188,7 +211,6 @@ fun startHttpServer(
                     }
                 }
             } catch (e: Exception) {
-                // Client disconnected or stream closed
             } finally {
                 activeSessions.remove(sessionId)
                 exchange.close()
@@ -208,12 +230,11 @@ fun startHttpServer(
                 
                 val os = if (sessionId != null) activeSessions[sessionId] else null
                 if (os == null) {
-                    exchange.sendResponseHeaders(404, -1) // Session not found
+                    exchange.sendResponseHeaders(404, -1)
                     exchange.close()
                     return@createContext
                 }
                 
-                // Liveness check: verify the SSE connection is still open before heavy processing
                 try {
                     synchronized(os) {
                         os.write(": processing\n\n".toByteArray(Charsets.UTF_8))
@@ -221,7 +242,7 @@ fun startHttpServer(
                     }
                 } catch (e: Exception) {
                     activeSessions.remove(sessionId)
-                    exchange.sendResponseHeaders(410, -1) // Gone
+                    exchange.sendResponseHeaders(410, -1)
                     exchange.close()
                     return@createContext
                 }
@@ -238,7 +259,7 @@ fun startHttpServer(
                     }
                 }
                 
-                exchange.sendResponseHeaders(202, -1) // Accepted
+                exchange.sendResponseHeaders(202, -1)
             } catch (e: Exception) {
                 System.err.println("HTTP Error on /message: ${e.message}")
                 exchange.sendResponseHeaders(500, -1)
@@ -256,17 +277,152 @@ fun startHttpServer(
     val actualPort = server.address.port
     System.err.println("MCP Lucene Server listening for SSE on http://${httpOptions.host}:$actualPort/sse")
     
+    var daemonPortFile: File? = null
+    if (isDaemon) {
+        val cacheDir = cacheIndexPath(targetDir).toFile()
+        daemonPortFile = File(cacheDir, "daemon.port")
+        daemonPortFile.writeText(actualPort.toString())
+        
+        val autoShutdownThread = Thread {
+            var emptyTicks = 0
+            while (true) {
+                Thread.sleep(1000)
+                if (activeSessions.isEmpty()) {
+                    emptyTicks++
+                    if (emptyTicks >= 10) {
+                        System.err.println("No active clients for 10 seconds. Daemon shutting down.")
+                        daemonPortFile.delete()
+                        System.exit(0)
+                    }
+                } else {
+                    emptyTicks = 0
+                }
+            }
+        }
+        autoShutdownThread.isDaemon = true
+        autoShutdownThread.start()
+    }
+    
     Runtime.getRuntime().addShutdownHook(Thread {
         System.err.println("Stopping HTTP server...")
-        server.stop(1) // Wait max 1 sec for active requests
+        daemonPortFile?.delete()
+        server.stop(1)
     })
     
-    // Block the main thread since the server runs in a daemon thread
     try {
         Thread.currentThread().join()
     } catch (e: InterruptedException) {
-        // Ignored
     }
+}
+
+fun getDaemonPort(file: File): Int? {
+    if (!file.exists()) return null
+    return try {
+        file.readText().trim().toIntOrNull()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun isDaemonAlive(port: Int): Boolean {
+    return try {
+        java.net.Socket("127.0.0.1", port).use { true }
+    } catch (e: Exception) {
+        false
+    }
+}
+
+fun startDaemonProcess(targetDir: File) {
+    val javaHome = System.getProperty("java.home")
+    val javaBin = File(File(javaHome, "bin"), "java").absolutePath
+    val classpath = System.getProperty("java.class.path")
+    val mainClass = "cz.loplex.lucenemcp.MainKt"
+    
+    val pb = ProcessBuilder(javaBin, "-cp", classpath, mainClass, targetDir.absolutePath, "--daemon")
+    pb.redirectError(ProcessBuilder.Redirect.INHERIT)
+    pb.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+    pb.start()
+}
+
+fun runProxyMode(targetDir: File) {
+    val cacheDir = cacheIndexPath(targetDir).toFile()
+    val daemonPortFile = File(cacheDir, "daemon.port")
+    var port = getDaemonPort(daemonPortFile)
+    
+    if (port == null || !isDaemonAlive(port)) {
+        System.err.println("Starting daemon...")
+        startDaemonProcess(targetDir)
+        var retries = 50
+        while (retries > 0) {
+            port = getDaemonPort(daemonPortFile)
+            if (port != null && isDaemonAlive(port)) break
+            Thread.sleep(100)
+            retries--
+        }
+        if (port == null || !isDaemonAlive(port)) {
+            System.err.println("Failed to start daemon.")
+            exitProcess(1)
+        }
+    }
+    
+    System.err.println("Connected to daemon on port $port")
+    
+    val client = HttpClient.newHttpClient()
+    val req = HttpRequest.newBuilder(URI("http://127.0.0.1:$port/sse"))
+        .header("Accept", "text/event-stream")
+        .build()
+        
+    val sessionIdRef = AtomicReference<String>(null)
+    
+    val sseThread = Thread {
+        try {
+            val resp = client.send(req, HttpResponse.BodyHandlers.ofLines())
+            var currentEvent = ""
+            resp.body().forEach { line ->
+                if (line.startsWith("event: ")) {
+                    currentEvent = line.substringAfter("event: ").trim()
+                } else if (line.startsWith("data: ")) {
+                    val data = line.substringAfter("data: ")
+                    if (currentEvent == "endpoint") {
+                        val url = data.trim()
+                        val sessionId = url.substringAfter("sessionId=")
+                        sessionIdRef.set(sessionId)
+                    } else if (currentEvent == "message") {
+                        println(data)
+                        System.out.flush()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            System.err.println("SSE connection closed: ${e.message}")
+        }
+        System.exit(0)
+    }
+    sseThread.start()
+    
+    while (sessionIdRef.get() == null) {
+        Thread.sleep(50)
+        if (!sseThread.isAlive) exitProcess(1)
+    }
+    
+    val sessionId = sessionIdRef.get()
+    val scanner = Scanner(System.`in`)
+    while (scanner.hasNextLine()) {
+        val line = scanner.nextLine()
+        if (line.isBlank()) continue
+        
+        try {
+            val postReq = HttpRequest.newBuilder(URI("http://127.0.0.1:$port/message?sessionId=$sessionId"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(line))
+                .build()
+            client.send(postReq, HttpResponse.BodyHandlers.discarding())
+        } catch (e: Exception) {
+            System.err.println("Failed to send message: ${e.message}")
+            break
+        }
+    }
+    System.exit(0)
 }
 
 fun createInitResponse(id: JsonElement): JsonObject {

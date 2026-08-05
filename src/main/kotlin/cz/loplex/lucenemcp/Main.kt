@@ -243,8 +243,17 @@ fun startHttpServer(
     val actualPort = server.address.port
     System.err.println("MCP Lucene Server listening for SSE on http://${httpOptions.host}:$actualPort/sse")
     
+    Runtime.getRuntime().addShutdownHook(Thread {
+        System.err.println("Stopping HTTP server...")
+        server.stop(1) // Wait max 1 sec for active requests
+    })
+    
     // Block the main thread since the server runs in a daemon thread
-    Thread.currentThread().join()
+    try {
+        Thread.currentThread().join()
+    } catch (e: InterruptedException) {
+        // Ignored
+    }
 }
 
 fun createInitResponse(id: JsonElement): JsonObject {

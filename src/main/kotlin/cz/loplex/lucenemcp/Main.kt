@@ -298,6 +298,10 @@ fun startHttpServer(
         daemonPortFile = File(cacheDir, "daemon.port")
         daemonPortFile.writeText(actualPort.toString())
         
+        Runtime.getRuntime().addShutdownHook(Thread {
+            daemonPortFile.delete()
+        })
+        
         val shutdownTicks = System.getProperty("mcp.shutdown.ticks", "10").toInt()
         val autoShutdownThread = Thread {
             var emptyTicks = 0
@@ -307,7 +311,6 @@ fun startHttpServer(
                     emptyTicks++
                     if (emptyTicks >= shutdownTicks) {
                         System.err.println("No active clients for $shutdownTicks seconds. Daemon shutting down.")
-                        daemonPortFile.delete()
                         System.exit(0)
                     }
                 } else {

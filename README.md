@@ -120,3 +120,7 @@ mvn test          # JUnit 5 unit tests
 e2e/run.sh --build  # end-to-end test: drives the packaged jar over the real JSON-RPC/stdio
                      # protocol against a disposable git fixture
 ```
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).

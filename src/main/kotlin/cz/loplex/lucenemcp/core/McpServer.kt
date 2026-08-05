@@ -43,6 +43,7 @@ fun handleToolCall(
             "call_hierarchy" -> handleCallHierarchy(arguments, root, astCache, externalRoots)
             "reindex_code" -> handleReindexCode(indexManager)
             "add_external_roots" -> handleAddExternalRoots(arguments, indexManager)
+            "add_maven_dependency_sources" -> handleAddMavenDependencySources(arguments, indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
     } catch (e: Exception) {
@@ -188,6 +189,15 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
             "directories" to prop("string", "Comma-separated list of absolute paths to add as external roots (e.g. '/path/to/node_modules,/path/to/vendor').")
         ),
         required = listOf("directories")
+    ))
+
+    tools.add(tool(
+        name = "add_maven_dependency_sources",
+        description = "Downloads a Maven dependency's source jar (-sources.jar) using 'mvn dependency:get' and adds it to the index as an external root. The artifact must be in the format 'groupId:artifactId:version'.",
+        properties = linkedMapOf(
+            "artifact" to prop("string", "The Maven artifact coordinate, e.g. 'org.springframework:spring-core:6.1.0'.")
+        ),
+        required = listOf("artifact")
     ))
 
     result.add("tools", tools)

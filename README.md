@@ -27,6 +27,7 @@ Communication is strictly JSON-RPC 2.0 over standard I/O for the MCP client, but
 - **`list_files`** — lists project files by glob pattern (respects `.gitignore`).
 - **`reindex_code`** — forces an incremental resync of the `search_code` index.
 - **`add_external_roots`** — adds new external directories to the index at runtime. (Note: Any `*-sources.jar` files added or found within directories are automatically unzipped and indexed!)
+- **`add_maven_dependency_sources`** — downloads a Maven dependency's source jar and adds it to the index on the fly.
 
 Supported languages for the tree-sitter-backed tools: Kotlin, Java, TypeScript/TSX, JavaScript,
 Python, Go, Rust, C, C++, C#, PHP, Ruby, Swift (`find_implementations` excludes Go — its interfaces are structural, with no

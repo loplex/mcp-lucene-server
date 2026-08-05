@@ -91,6 +91,52 @@ fun handleAddExternalRoots(arguments: JsonObject, indexManager: IndexManager): S
            "Total active external roots: ${indexManager.externalRoots.size}."
 }
 
+fun handleAddMavenDependencySources(arguments: JsonObject, indexManager: IndexManager): String {
+    val artifact = arguments.get("artifact")?.asString
+    if (artifact.isNullOrBlank()) return "Missing required argument: artifact"
+    
+    val parts = artifact.split(":")
+    if (parts.size != 3) {
+        return "Invalid artifact format. Must be groupId:artifactId:version"
+    }
+    
+    val groupId = parts[0]
+    val artifactId = parts[1]
+    val version = parts[2]
+    
+    try {
+        val process = ProcessBuilder("mvn", "dependency:get", "-Dartifact=$artifact:jar:sources")
+            .redirectErrorStream(true)
+            .start()
+        
+        val output = process.inputStream.bufferedReader().readText()
+        process.waitFor()
+        if (process.exitValue() != 0) {
+            return "Maven failed to download sources:\n$output"
+        }
+        
+        val m2Path = File(System.getProperty("user.home"), ".m2/repository")
+        val groupPath = groupId.replace('.', '/')
+        val jarFile = File(m2Path, "$groupPath/$artifactId/$version/$artifactId-$version-sources.jar")
+        
+        if (!jarFile.exists()) {
+            return "Maven reported success, but sources jar was not found at expected path: ${jarFile.absolutePath}\nOutput:\n$output"
+        }
+        
+        val existingRoots = indexManager.externalRoots.map { it.absolutePath }
+        if (jarFile.absolutePath in existingRoots) {
+            return "Sources for $artifact are already added."
+        }
+        
+        indexManager.externalRoots = indexManager.externalRoots + jarFile
+        val syncResult = indexManager.sync()
+        return "Successfully downloaded and added sources for $artifact.\n" +
+               "Sync result: +${syncResult.added} ~${syncResult.updated} -${syncResult.deleted}."
+    } catch (e: Exception) {
+        return "Failed to run Maven: ${e.message}"
+    }
+}
+
 
 fun handleGrepCode(arguments: JsonObject, root: File, externalRoots: List<File>): String {
     val pattern = arguments.get("pattern")?.asString

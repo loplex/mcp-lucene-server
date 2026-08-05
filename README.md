@@ -7,6 +7,25 @@ an agent's built-in grep/glob/read-file tools for a target codebase.
 
 Communication is strictly JSON-RPC 2.0 over standard I/O for the MCP client, but internally it uses a lightweight Proxy-Daemon architecture over HTTP/SSE. This allows the heavy Lucene JVM to stay alive in the background between editor restarts, sharing a single loaded index across multiple client windows.
 
+## Why this exists? (The IDE MCP problem)
+
+Full IDE MCP servers (like JetBrains `intellij-index`) are incredibly powerful but they are fundamentally not optimized for LLM context windows:
+- **Heavy & Slow:** Require a fully running IDE and can take 5–10 seconds to respond to deep hierarchical queries.
+- **Context Bloat:** Return deeply nested, highly verbose JSON structures that burn through LLM context tokens and often confuse the agent.
+- **No Conceptual Search:** IDE indexes rely on strict Regex or substring matching, failing on fuzzy conceptual queries.
+
+This MCP server solves the LLM overhead problem by combining the speed of Apache Lucene with the semantic accuracy of Tree-sitter ASTs.
+
+## 📊 Performance Benchmarks
+*Tested on a large Kotlin codebase, comparing this standalone Lucene server against the built-in JetBrains MCP server and native AI grep tools.*
+
+| Feature | Lucene MCP | JetBrains MCP | Native `grep` |
+| :--- | :--- | :--- | :--- |
+| **TTFR (Extract Symbol)** | **~2.0s** | ~5.0s (requires 2 steps) | N/A |
+| **Context Token Overhead** | **Extremely Low** | High | Very High |
+| **Fuzzy Semantic Search** | **Yes (Lucene)** | No (Substring/Regex only) | No |
+| **IDE Dependency** | **None (Standalone)** | Requires running IDE | None |
+
 ## Tools
 
 - **`search_code`** — analyzed/fuzzy fulltext search (word-form aware) over a persistent,

@@ -188,7 +188,7 @@ fun startHttpServer(
         }
     }
     
-    server.executor = null // Use default executor
+    server.executor = java.util.concurrent.Executors.newCachedThreadPool()
     server.start()
     System.err.println("MCP Lucene Server listening on http://${httpOptions.host}:${httpOptions.port}")
     

@@ -190,12 +190,15 @@ private fun containsNodeType(node: TSNode, types: Set<String>): Boolean {
 private val queryCache = HashMap<Pair<String, String>, TSQuery?>()
 
 /** Compiles [querySource] for [languageName], caching the result (including failures, as null). */
-fun compiledQuery(languageName: String, querySource: String): TSQuery? =
-    queryCache.getOrPut(languageName to querySource) {
-        try {
-            TSQuery(newLanguageInstance(languageName), querySource)
-        } catch (e: Exception) {
-            System.err.println("Skipping tree-sitter query for '$languageName' (failed to compile): ${e.message}")
-            null
+fun compiledQuery(languageName: String, querySource: String): TSQuery? {
+    synchronized(queryCache) {
+        return queryCache.getOrPut(languageName to querySource) {
+            try {
+                TSQuery(newLanguageInstance(languageName), querySource)
+            } catch (e: Exception) {
+                System.err.println("Skipping tree-sitter query for '$languageName' (failed to compile): ${e.message}")
+                null
+            }
         }
     }
+}

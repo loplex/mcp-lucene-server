@@ -561,11 +561,22 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
 
     tools.add(tool(
         name = "outline",
-        description = "Lists every symbol a file defines (class/interface/function/property/...) in source order, without reading the whole file — a quick structural overview before deciding what to read_file. Backed by the same tree-sitter parse tree as find_definition/find_references. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs.",
+        description = "Lists every symbol a file defines (class/interface/function/property/...) in source order, without reading the whole file — a quick structural overview before deciding what to read_file. Backed by the same tree-sitter parse tree as find_definition/find_references. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs, c, cpp, cs, php, rb, swift.",
         properties = linkedMapOf(
             "path" to prop("string", "Path to the file, relative to the project root.")
         ),
         required = listOf("path")
+    ))
+
+    tools.add(tool(
+        name = "search_ast",
+        description = "Runs a raw tree-sitter query against all files of a specific language in the project. Useful for structural code search (e.g., finding all classes inheriting from X, or methods named Y).",
+        properties = linkedMapOf(
+            "query" to prop("string", "Tree-sitter query string (e.g. '(class_declaration name: (identifier) @name)'). At least one capture like @name is required."),
+            "language" to prop("string", "The tree-sitter language name (e.g. 'kotlin', 'java', 'typescript', 'python', 'c', 'cpp', 'c_sharp', 'php', 'ruby', 'swift', 'go', 'rust')."),
+            "pattern" to prop("string", "Optional glob pattern for relative path to filter files (e.g. '**/*.kt').")
+        ),
+        required = listOf("query", "language")
     ))
 
     tools.add(tool(
@@ -629,6 +640,7 @@ fun handleToolCall(
             "find_references" -> handleFindReferences(arguments, root, astCache)
             "find_implementations" -> handleFindImplementations(arguments, root, astCache)
             "outline" -> handleOutline(arguments, root, astCache)
+            "search_ast" -> handleSearchAst(arguments, root, astCache)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -751,9 +763,15 @@ private fun handleFindImplementations(arguments: JsonObject, root: File, astCach
 }
 
 private fun handleOutline(arguments: JsonObject, root: File, astCache: AstCache): String {
-    val path = arguments.get("path")?.asString
-    if (path.isNullOrBlank()) return "Missing required argument: path"
+    val path = arguments.get("path")?.asString ?: return "Missing path argument"
     return runOutline(root, path, astCache)
+}
+
+private fun handleSearchAst(arguments: JsonObject, root: File, astCache: AstCache): String {
+    val query = arguments.get("query")?.asString ?: return "Missing query argument"
+    val language = arguments.get("language")?.asString ?: return "Missing language argument"
+    val pattern = arguments.get("pattern")?.asString
+    return runSearchAst(root, query, language, pattern, astCache)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

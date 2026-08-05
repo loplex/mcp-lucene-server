@@ -9,6 +9,12 @@ import org.treesitter.TreeSitterPython
 import org.treesitter.TreeSitterRust
 import org.treesitter.TreeSitterTsx
 import org.treesitter.TreeSitterTypescript
+import org.treesitter.TreeSitterC
+import org.treesitter.TreeSitterCpp
+import org.treesitter.TreeSitterCSharp
+import org.treesitter.TreeSitterPhp
+import org.treesitter.TreeSitterRuby
+import org.treesitter.TreeSitterSwift
 
 /** Which tree-sitter grammar (a name shared with the per-language query tables in [AstQueries]) handles a file extension. */
 private val LANGUAGE_NAME_BY_EXTENSION: Map<String, String> = mapOf(
@@ -19,7 +25,13 @@ private val LANGUAGE_NAME_BY_EXTENSION: Map<String, String> = mapOf(
     "js" to "javascript", "jsx" to "javascript", "mjs" to "javascript",
     "py" to "python",
     "go" to "go",
-    "rs" to "rust"
+    "rs" to "rust",
+    "c" to "c", "h" to "c",
+    "cpp" to "cpp", "cc" to "cpp", "cxx" to "cpp", "hpp" to "cpp", "hxx" to "cpp",
+    "cs" to "c_sharp",
+    "php" to "php",
+    "rb" to "ruby",
+    "swift" to "swift"
 )
 
 val SUPPORTED_AST_EXTENSIONS: Set<String> = LANGUAGE_NAME_BY_EXTENSION.keys
@@ -36,5 +48,11 @@ fun newLanguageInstance(languageName: String): TSLanguage = when (languageName) 
     "python" -> TreeSitterPython()
     "go" -> TreeSitterGo()
     "rust" -> TreeSitterRust()
+    "c" -> TreeSitterC()
+    "cpp" -> TreeSitterCpp()
+    "c_sharp" -> TreeSitterCSharp()
+    "php" -> TreeSitterPhp()
+    "ruby" -> TreeSitterRuby()
+    "swift" -> TreeSitterSwift()
     else -> throw IllegalArgumentException("Unsupported language: $languageName")
 }

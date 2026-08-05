@@ -93,6 +93,56 @@ private val RUST_DEFINITIONS = listOf(
     DefinitionQuery("type", """(type_item name: (type_identifier) @name) @definition.type""")
 )
 
+private val C_DEFINITIONS = listOf(
+    DefinitionQuery("struct", """(struct_specifier name: (type_identifier) @name) @definition.struct"""),
+    DefinitionQuery("enum", """(enum_specifier name: (type_identifier) @name) @definition.enum"""),
+    DefinitionQuery("typealias", """(type_definition declarator: (type_identifier) @name) @definition.typealias"""),
+    DefinitionQuery("function", """(function_definition declarator: (function_declarator declarator: (identifier) @name)) @definition.function""")
+)
+
+private val CPP_DEFINITIONS = listOf(
+    DefinitionQuery("class", """(class_specifier name: (type_identifier) @name) @definition.class"""),
+    DefinitionQuery("struct", """(struct_specifier name: (type_identifier) @name) @definition.struct"""),
+    DefinitionQuery("enum", """(enum_specifier name: (type_identifier) @name) @definition.enum"""),
+    DefinitionQuery("typealias", """(type_definition declarator: (type_identifier) @name) @definition.typealias"""),
+    DefinitionQuery("typealias", """(alias_declaration name: (type_identifier) @name) @definition.typealias"""),
+    DefinitionQuery("function", """(function_definition declarator: (function_declarator declarator: (identifier) @name)) @definition.function"""),
+    DefinitionQuery("function", """(function_definition declarator: (function_declarator declarator: (field_identifier) @name)) @definition.function""", priority = 1)
+)
+
+private val C_SHARP_DEFINITIONS = listOf(
+    DefinitionQuery("class", """(class_declaration name: (identifier) @name) @definition.class"""),
+    DefinitionQuery("struct", """(struct_declaration name: (identifier) @name) @definition.struct"""),
+    DefinitionQuery("interface", """(interface_declaration name: (identifier) @name) @definition.interface"""),
+    DefinitionQuery("enum", """(enum_declaration name: (identifier) @name) @definition.enum"""),
+    DefinitionQuery("method", """(method_declaration name: (identifier) @name) @definition.method"""),
+    DefinitionQuery("property", """(property_declaration name: (identifier) @name) @definition.property"""),
+    DefinitionQuery("delegate", """(delegate_declaration name: (identifier) @name) @definition.delegate""")
+)
+
+private val PHP_DEFINITIONS = listOf(
+    DefinitionQuery("class", """(class_declaration name: (name) @name) @definition.class"""),
+    DefinitionQuery("interface", """(interface_declaration name: (name) @name) @definition.interface"""),
+    DefinitionQuery("trait", """(trait_declaration name: (name) @name) @definition.trait"""),
+    DefinitionQuery("function", """(function_definition name: (name) @name) @definition.function"""),
+    DefinitionQuery("method", """(method_declaration name: (name) @name) @definition.method""")
+)
+
+private val RUBY_DEFINITIONS = listOf(
+    DefinitionQuery("class", """(class name: (constant) @name) @definition.class"""),
+    DefinitionQuery("module", """(module name: (constant) @name) @definition.module"""),
+    DefinitionQuery("method", """(method name: (identifier) @name) @definition.method"""),
+    DefinitionQuery("method", """(singleton_method name: (identifier) @name) @definition.method""")
+)
+
+private val SWIFT_DEFINITIONS = listOf(
+    DefinitionQuery("type", """(class_declaration name: (type_identifier) @name) @definition.type"""),
+    DefinitionQuery("protocol", """(protocol_declaration name: (type_identifier) @name) @definition.protocol"""),
+    DefinitionQuery("function", """(function_declaration name: (simple_identifier) @name) @definition.function"""),
+    DefinitionQuery("property", """(property_declaration name: (pattern bound_identifier: (simple_identifier) @name)) @definition.property"""),
+    DefinitionQuery("typealias", """(typealias_declaration name: (type_identifier) @name) @definition.typealias""")
+)
+
 /**
  * One tree-sitter query pattern identifying an `extends`/`implements`(-shaped) clause: [source]
  * must end in a `@name` capture on the *subtype's* name and a `@supertype` capture on the
@@ -136,6 +186,30 @@ private val RUST_IMPLEMENTS = listOf(
     ImplementsQuery("implements", """(impl_item trait: (type_identifier) @supertype type: (type_identifier) @name) @implements""")
 )
 
+private val CPP_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class_specifier name: (type_identifier) @name (base_class_clause (type_identifier) @supertype)) @implements"""),
+    ImplementsQuery("extends", """(struct_specifier name: (type_identifier) @name (base_class_clause (type_identifier) @supertype)) @implements""")
+)
+
+private val C_SHARP_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class_declaration name: (identifier) @name (base_list (identifier) @supertype)) @implements"""),
+    ImplementsQuery("extends", """(struct_declaration name: (identifier) @name (base_list (identifier) @supertype)) @implements""")
+)
+
+private val PHP_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class_declaration name: (name) @name (base_clause (name) @supertype)) @implements"""),
+    ImplementsQuery("implements", """(class_declaration name: (name) @name (class_interface_clause (name) @supertype)) @implements"""),
+    ImplementsQuery("extends", """(interface_declaration name: (name) @name (base_clause (name) @supertype)) @implements""")
+)
+
+private val RUBY_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class name: (constant) @name superclass: (superclass (constant) @supertype)) @implements""")
+)
+
+private val SWIFT_IMPLEMENTS = listOf(
+    ImplementsQuery("extends", """(class_declaration name: (type_identifier) @name (inheritance_specifier inherits_from: (user_type (type_identifier) @supertype))) @implements""")
+)
+
 /**
  * Per-language `extends`/`implements`(-shaped) clause queries, used by `find_implementations` to
  * find direct subtypes of a given base type/interface/trait name — see [ImplementsQuery]. Go is
@@ -153,7 +227,12 @@ val IMPLEMENTS_BY_LANGUAGE: Map<String, List<ImplementsQuery>> = mapOf(
     "tsx" to TYPESCRIPT_IMPLEMENTS,
     "javascript" to JAVASCRIPT_IMPLEMENTS,
     "python" to PYTHON_IMPLEMENTS,
-    "rust" to RUST_IMPLEMENTS
+    "rust" to RUST_IMPLEMENTS,
+    "cpp" to CPP_IMPLEMENTS,
+    "c_sharp" to C_SHARP_IMPLEMENTS,
+    "php" to PHP_IMPLEMENTS,
+    "ruby" to RUBY_IMPLEMENTS,
+    "swift" to SWIFT_IMPLEMENTS
 )
 
 val DEFINITIONS_BY_LANGUAGE: Map<String, List<DefinitionQuery>> = mapOf(
@@ -164,7 +243,13 @@ val DEFINITIONS_BY_LANGUAGE: Map<String, List<DefinitionQuery>> = mapOf(
     "javascript" to JAVASCRIPT_DEFINITIONS,
     "python" to PYTHON_DEFINITIONS,
     "go" to GO_DEFINITIONS,
-    "rust" to RUST_DEFINITIONS
+    "rust" to RUST_DEFINITIONS,
+    "c" to C_DEFINITIONS,
+    "cpp" to CPP_DEFINITIONS,
+    "c_sharp" to C_SHARP_DEFINITIONS,
+    "php" to PHP_DEFINITIONS,
+    "ruby" to RUBY_DEFINITIONS,
+    "swift" to SWIFT_DEFINITIONS
 )
 
 val REFERENCE_RULES_BY_LANGUAGE: Map<String, ReferenceRules> = mapOf(
@@ -207,6 +292,36 @@ val REFERENCE_RULES_BY_LANGUAGE: Map<String, ReferenceRules> = mapOf(
         identifierNodeTypes = setOf("identifier", "type_identifier", "field_identifier"),
         callAncestorTypes = setOf("call_expression"),
         importAncestorTypes = setOf("use_declaration")
+    ),
+    "c" to ReferenceRules(
+        identifierNodeTypes = setOf("identifier", "type_identifier", "field_identifier"),
+        callAncestorTypes = setOf("call_expression"),
+        importAncestorTypes = setOf("preproc_include")
+    ),
+    "cpp" to ReferenceRules(
+        identifierNodeTypes = setOf("identifier", "type_identifier", "field_identifier", "namespace_identifier"),
+        callAncestorTypes = setOf("call_expression"),
+        importAncestorTypes = setOf("preproc_include", "using_declaration")
+    ),
+    "c_sharp" to ReferenceRules(
+        identifierNodeTypes = setOf("identifier"),
+        callAncestorTypes = setOf("invocation_expression", "object_creation_expression"),
+        importAncestorTypes = setOf("using_directive")
+    ),
+    "php" to ReferenceRules(
+        identifierNodeTypes = setOf("name"),
+        callAncestorTypes = setOf("function_call_expression", "method_call_expression", "object_creation_expression"),
+        importAncestorTypes = setOf("namespace_use_clause")
+    ),
+    "ruby" to ReferenceRules(
+        identifierNodeTypes = setOf("identifier", "constant"),
+        callAncestorTypes = setOf("call"),
+        importAncestorTypes = emptySet()
+    ),
+    "swift" to ReferenceRules(
+        identifierNodeTypes = setOf("simple_identifier", "type_identifier"),
+        callAncestorTypes = setOf("call_expression"),
+        importAncestorTypes = setOf("import_declaration")
     )
 )
 
@@ -255,6 +370,13 @@ fun isQualifiedAccess(node: TSNode, languageName: String): Boolean {
         "typescript", "tsx", "javascript" -> parent.type == "member_expression" && fieldIs(parent, "property", node)
         "go" -> parent.type == "selector_expression" && fieldIs(parent, "field", node)
         "rust" -> parent.type == "field_expression" && fieldIs(parent, "field", node)
+        "c" -> parent.type == "field_expression" && fieldIs(parent, "field", node)
+        "cpp" -> (parent.type == "field_expression" && fieldIs(parent, "field", node)) ||
+                 (parent.type == "qualified_identifier" && fieldIs(parent, "name", node))
+        "c_sharp" -> parent.type == "member_access_expression" && fieldIs(parent, "name", node)
+        "php" -> (parent.type == "member_access_expression" || parent.type == "member_call_expression" || parent.type == "class_constant_access_expression") && fieldIs(parent, "name", node)
+        "ruby" -> parent.type == "call" && fieldIs(parent, "method", node)
+        "swift" -> parent.type == "navigation_suffix"
         else -> false
     }
 }
@@ -331,5 +453,35 @@ val IMPORT_QUERIES_BY_LANGUAGE: Map<String, ImportQueryConfig> = mapOf(
         importQuery = "(import_spec) @import",
         wildcardNodeTypes = setOf("dot")
     ),
-    "rust" to ImportQueryConfig(null, "(use_declaration) @import", setOf("use_wildcard"))
+    "rust" to ImportQueryConfig(null, "(use_declaration) @import", setOf("use_wildcard")),
+    "c" to ImportQueryConfig(
+        packageQuery = null,
+        importQuery = "(preproc_include) @import",
+        wildcardNodeTypes = setOf("preproc_include")
+    ),
+    "cpp" to ImportQueryConfig(
+        packageQuery = null,
+        importQuery = "(preproc_include) @import (using_declaration) @import",
+        wildcardNodeTypes = setOf("preproc_include", "using_declaration")
+    ),
+    "c_sharp" to ImportQueryConfig(
+        packageQuery = "(file_scoped_namespace_declaration name: (_) @package) (namespace_declaration name: (_) @package)",
+        importQuery = "(using_directive) @import",
+        wildcardNodeTypes = setOf("using_directive")
+    ),
+    "php" to ImportQueryConfig(
+        packageQuery = "(namespace_definition name: (namespace_name) @package)",
+        importQuery = "(namespace_use_declaration) @import",
+        wildcardNodeTypes = emptySet()
+    ),
+    "ruby" to ImportQueryConfig(
+        packageQuery = null,
+        importQuery = "(program) @import",
+        wildcardNodeTypes = setOf("program")
+    ),
+    "swift" to ImportQueryConfig(
+        packageQuery = null,
+        importQuery = "(import_declaration) @import",
+        wildcardNodeTypes = setOf("import_declaration")
+    )
 )

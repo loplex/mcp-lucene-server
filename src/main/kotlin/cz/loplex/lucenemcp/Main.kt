@@ -580,6 +580,16 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
     ))
 
     tools.add(tool(
+        name = "call_hierarchy",
+        description = "Finds incoming or outgoing function calls for a given symbol. Incoming calls: who calls this function. Outgoing calls: which functions this function calls.",
+        properties = linkedMapOf(
+            "symbol" to prop("string", "Exact symbol name (function/method name), e.g. 'handleRequest'."),
+            "direction" to prop("string", "Either 'incoming' or 'outgoing'.")
+        ),
+        required = listOf("symbol", "direction")
+    ))
+
+    tools.add(tool(
         name = "reindex_code",
         description = "Explicitly runs an incremental sync of the Lucene index (search_code) with the filesystem and returns the number of added/updated/deleted documents. The index is normally kept fresh in the background by a file watcher; this tool is for forced verification or in case the watcher missed something (e.g. the OS watched-directory limit was hit).",
         properties = linkedMapOf(),
@@ -641,6 +651,7 @@ fun handleToolCall(
             "find_implementations" -> handleFindImplementations(arguments, root, astCache)
             "outline" -> handleOutline(arguments, root, astCache)
             "search_ast" -> handleSearchAst(arguments, root, astCache)
+            "call_hierarchy" -> handleCallHierarchy(arguments, root, astCache)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -772,6 +783,12 @@ private fun handleSearchAst(arguments: JsonObject, root: File, astCache: AstCach
     val language = arguments.get("language")?.asString ?: return "Missing language argument"
     val pattern = arguments.get("pattern")?.asString
     return runSearchAst(root, query, language, pattern, astCache)
+}
+
+private fun handleCallHierarchy(arguments: JsonObject, root: File, astCache: AstCache): String {
+    val symbol = arguments.get("symbol")?.asString ?: return "Missing symbol argument"
+    val direction = arguments.get("direction")?.asString ?: return "Missing direction argument"
+    return runCallHierarchy(root, symbol, direction, astCache)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

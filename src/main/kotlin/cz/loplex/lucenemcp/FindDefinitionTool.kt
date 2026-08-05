@@ -13,15 +13,19 @@ data class DefinitionMatch(val path: String, val line: Int, val kind: String, va
  * definition. Always parses current file content directly (like `grep_code`) — no index involved,
  * never stale.
  */
-fun findDefinitions(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): List<DefinitionMatch> {
+fun findDefinitions(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache(), externalRoots: List<File> = emptyList()): List<DefinitionMatch> {
     val results = mutableListOf<DefinitionMatch>()
-    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+    val projectFiles = listProjectFiles(root, externalRoots).sortedBy { it.path }
     astCache.prune(projectFiles.mapTo(HashSet()) { it.absolutePath })
 
     outer@ for (file in projectFiles) {
         val languageName = languageNameFor(file.extension) ?: continue
         val parsed = astCache.getOrParse(file, file.extension) ?: continue
-        val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
+        val relativePath = if (file.absolutePath.startsWith(root.absolutePath)) {
+            file.relativeTo(root).path.replace(File.separatorChar, '/')
+        } else {
+            file.absolutePath.replace(File.separatorChar, '/')
+        }
 
         for (hit in definitionHitsInFile(parsed, languageName, symbol)) {
             results.add(DefinitionMatch(relativePath, hit.nameNode.startPoint.row + 1, hit.kind, parsed.lineTextOf(hit.nameNode)))
@@ -31,14 +35,14 @@ fun findDefinitions(root: File, symbol: String, maxMatches: Int, astCache: AstCa
     return results.sortedWith(compareBy({ it.path }, { it.line }))
 }
 
-fun runFindDefinition(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): String {
+fun runFindDefinition(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache(), externalRoots: List<File> = emptyList()): String {
     val trimmed = symbol.trim()
     if (trimmed.isEmpty()) return "Missing required argument: symbol"
     if (!IDENTIFIER.matches(trimmed)) {
         return "Invalid symbol: only identifier characters are supported (letters, digits, underscore, not starting with a digit)."
     }
 
-    val matches = findDefinitions(root, trimmed, maxMatches, astCache)
+    val matches = findDefinitions(root, trimmed, maxMatches, astCache, externalRoots)
     if (matches.isEmpty()) {
         return "No definition found for '$trimmed'. AST-based search covers: " +
             "${SUPPORTED_AST_EXTENSIONS.sorted().joinToString(", ")} files. " +

@@ -37,7 +37,8 @@ data class HttpOptions(val host: String, val port: Int)
 data class CliOptions(
     val httpOptions: HttpOptions?,
     val isDaemon: Boolean,
-    val noDaemon: Boolean
+    val noDaemon: Boolean,
+    val externalRoots: List<File>
 )
 
 fun parseCliOptions(args: Array<String>): CliOptions {
@@ -45,6 +46,7 @@ fun parseCliOptions(args: Array<String>): CliOptions {
     var host = DEFAULT_HTTP_HOST
     var isDaemon = false
     var noDaemon = false
+    var externalRoots = emptyList<File>()
     var i = 1
     while (i < args.size) {
         when (args[i]) {
@@ -52,13 +54,19 @@ fun parseCliOptions(args: Array<String>): CliOptions {
             "--http-host" -> if (i + 1 < args.size) host = args[++i]
             "--daemon" -> isDaemon = true
             "--no-daemon" -> noDaemon = true
+            "--external-roots" -> {
+                if (i + 1 < args.size) {
+                    externalRoots = args[++i].split(",").map { File(it) }
+                }
+            }
         }
         i++
     }
     return CliOptions(
         httpOptions = if (port != null) HttpOptions(host, port) else null,
         isDaemon = isDaemon,
-        noDaemon = noDaemon
+        noDaemon = noDaemon,
+        externalRoots = externalRoots
     )
 }
 
@@ -85,7 +93,7 @@ fun main(args: Array<String>) {
     val analyzer: Analyzer = PerFieldAnalyzerWrapper(CodeAnalyzer(), mapOf("words" to WordAnalyzer()))
 
     System.err.println("Opening persistent index for: ${targetDir.absolutePath}")
-    val indexManager = IndexManager(targetDir, analyzer)
+    val indexManager = IndexManager(targetDir, analyzer, cliOptions.externalRoots)
     val initialSync = indexManager.sync()
     System.err.println("Initial sync: +${initialSync.added} ~${initialSync.updated} -${initialSync.deleted}")
 
@@ -652,7 +660,8 @@ fun handleToolCall(
     analyzer: Analyzer,
     root: File,
     watcherActive: Boolean,
-    astCache: AstCache
+    astCache: AstCache,
+    externalRoots: List<File>
 ): JsonObject {
     val params = request.getAsJsonObject("params")
     val toolName = params?.get("name")?.asString
@@ -661,15 +670,15 @@ fun handleToolCall(
     val text = try {
         when (toolName) {
             "search_code" -> handleSearchCode(arguments, indexManager, analyzer, watcherActive)
-            "grep_code" -> handleGrepCode(arguments, root)
+            "grep_code" -> handleGrepCode(arguments, root, externalRoots)
             "read_file" -> handleReadFile(arguments, root)
-            "list_files" -> handleListFiles(arguments, root)
-            "find_definition" -> handleFindDefinition(arguments, root, astCache)
-            "find_references" -> handleFindReferences(arguments, root, astCache)
-            "find_implementations" -> handleFindImplementations(arguments, root, astCache)
+            "list_files" -> handleListFiles(arguments, root, externalRoots)
+            "find_definition" -> handleFindDefinition(arguments, root, astCache, externalRoots)
+            "find_references" -> handleFindReferences(arguments, root, astCache, externalRoots)
+            "find_implementations" -> handleFindImplementations(arguments, root, astCache, externalRoots)
             "outline" -> handleOutline(arguments, root, astCache)
-            "search_ast" -> handleSearchAst(arguments, root, astCache)
-            "call_hierarchy" -> handleCallHierarchy(arguments, root, astCache)
+            "search_ast" -> handleSearchAst(arguments, root, astCache, externalRoots)
+            "call_hierarchy" -> handleCallHierarchy(arguments, root, astCache, externalRoots)
             "reindex_code" -> handleReindexCode(indexManager)
             else -> return createErrorResponse(id, -32602, "Unknown tool: $toolName")
         }
@@ -738,7 +747,7 @@ private fun handleSearchCode(arguments: JsonObject, indexManager: IndexManager, 
     }
 }
 
-private fun handleGrepCode(arguments: JsonObject, root: File): String {
+private fun handleGrepCode(arguments: JsonObject, root: File, externalRoots: List<File>): String {
     val pattern = arguments.get("pattern")?.asString
     if (pattern.isNullOrBlank()) return "Missing required argument: pattern"
 
@@ -753,7 +762,7 @@ private fun handleGrepCode(arguments: JsonObject, root: File): String {
         outputMode = arguments.get("outputMode")?.asString ?: "content",
         maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
     )
-    return runGrep(root, options)
+    return runGrep(root, options, externalRoots)
 }
 
 private fun handleReadFile(arguments: JsonObject, root: File): String {
@@ -764,31 +773,31 @@ private fun handleReadFile(arguments: JsonObject, root: File): String {
     return readFileRange(root, path, startLine, endLine)
 }
 
-private fun handleListFiles(arguments: JsonObject, root: File): String {
+private fun handleListFiles(arguments: JsonObject, root: File, externalRoots: List<File>): String {
     val pattern = arguments.get("pattern")?.asString
     val limit = arguments.get("limit")?.asInt ?: DEFAULT_LIST_LIMIT
-    return runListFiles(root, pattern, limit)
+    return runListFiles(root, pattern, limit, externalRoots)
 }
 
-private fun handleFindDefinition(arguments: JsonObject, root: File, astCache: AstCache): String {
+private fun handleFindDefinition(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
     val symbol = arguments.get("symbol")?.asString
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
-    return runFindDefinition(root, symbol, maxMatches, astCache)
+    return runFindDefinition(root, symbol, maxMatches, astCache, externalRoots)
 }
 
-private fun handleFindReferences(arguments: JsonObject, root: File, astCache: AstCache): String {
+private fun handleFindReferences(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
     val symbol = arguments.get("symbol")?.asString
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
-    return runFindReferences(root, symbol, maxMatches, astCache)
+    return runFindReferences(root, symbol, maxMatches, astCache, externalRoots)
 }
 
-private fun handleFindImplementations(arguments: JsonObject, root: File, astCache: AstCache): String {
+private fun handleFindImplementations(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
     val type = arguments.get("type")?.asString
     if (type.isNullOrBlank()) return "Missing required argument: type"
     val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
-    return runFindImplementations(root, type, maxMatches, astCache)
+    return runFindImplementations(root, type, maxMatches, astCache, externalRoots)
 }
 
 private fun handleOutline(arguments: JsonObject, root: File, astCache: AstCache): String {
@@ -796,17 +805,17 @@ private fun handleOutline(arguments: JsonObject, root: File, astCache: AstCache)
     return runOutline(root, path, astCache)
 }
 
-private fun handleSearchAst(arguments: JsonObject, root: File, astCache: AstCache): String {
+private fun handleSearchAst(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
     val query = arguments.get("query")?.asString ?: return "Missing query argument"
     val language = arguments.get("language")?.asString ?: return "Missing language argument"
     val pattern = arguments.get("pattern")?.asString
-    return runSearchAst(root, query, language, pattern, astCache)
+    return runSearchAst(root, query, language, pattern, astCache, externalRoots)
 }
 
-private fun handleCallHierarchy(arguments: JsonObject, root: File, astCache: AstCache): String {
+private fun handleCallHierarchy(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
     val symbol = arguments.get("symbol")?.asString ?: return "Missing symbol argument"
     val direction = arguments.get("direction")?.asString ?: return "Missing direction argument"
-    return runCallHierarchy(root, symbol, direction, astCache)
+    return runCallHierarchy(root, symbol, direction, astCache, externalRoots)
 }
 
 private fun handleReindexCode(indexManager: IndexManager): String {

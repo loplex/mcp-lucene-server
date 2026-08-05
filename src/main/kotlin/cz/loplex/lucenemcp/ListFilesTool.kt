@@ -3,9 +3,15 @@ package cz.loplex.lucenemcp
 import java.io.File
 
 /** Lists project files whose relative path matches an optional glob pattern (e.g. `src/**/*.kt`). */
-fun runListFiles(root: File, globPattern: String?, limit: Int): String {
-    val files = listProjectFiles(root)
-        .map { it.relativeTo(root).path.replace(File.separatorChar, '/') }
+fun runListFiles(root: File, globPattern: String?, limit: Int, externalRoots: List<File> = emptyList()): String {
+    val files = listProjectFiles(root, externalRoots)
+        .map { 
+            if (it.absolutePath.startsWith(root.absolutePath)) {
+                it.relativeTo(root).path.replace(File.separatorChar, '/')
+            } else {
+                it.absolutePath.replace(File.separatorChar, '/')
+            }
+        }
         .sorted()
 
     val filtered = if (globPattern != null) {

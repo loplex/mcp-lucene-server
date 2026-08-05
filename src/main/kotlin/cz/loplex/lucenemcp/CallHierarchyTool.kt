@@ -3,22 +3,22 @@ package cz.loplex.lucenemcp
 import org.treesitter.TSNode
 import java.io.File
 
-fun runCallHierarchy(root: File, symbol: String, direction: String, astCache: AstCache = AstCache()): String {
+fun runCallHierarchy(root: File, symbol: String, direction: String, astCache: AstCache = AstCache(), externalRoots: List<File> = emptyList()): String {
     if (symbol.isBlank()) return "Missing required argument: symbol"
     if (direction != "incoming" && direction != "outgoing") return "Direction must be 'incoming' or 'outgoing'"
 
     if (direction == "incoming") {
-        return findIncomingCalls(root, symbol, astCache)
+        return findIncomingCalls(root, symbol, astCache, externalRoots)
     } else {
-        return findOutgoingCalls(root, symbol, astCache)
+        return findOutgoingCalls(root, symbol, astCache, externalRoots)
     }
 }
 
-private fun findOutgoingCalls(root: File, symbol: String, astCache: AstCache): String {
+private fun findOutgoingCalls(root: File, symbol: String, astCache: AstCache, externalRoots: List<File>): String {
     val results = mutableListOf<String>()
     
     // 1. Find definition of the symbol (function/method)
-    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+    val projectFiles = listProjectFiles(root, externalRoots).sortedBy { it.path }
     val candidates = projectFiles.filter { file ->
         val lang = languageNameFor(file.extension)
         lang != null && file.readText().contains(symbol)
@@ -64,7 +64,12 @@ private fun findOutgoingCalls(root: File, symbol: String, astCache: AstCache): S
             val outgoings = extractOutgoingCalls(funcNode, parsed, rules.identifierNodeTypes)
             for (out in outgoings) {
                 if (callsFound.add(out)) {
-                    results.add("- $out() called from ${file.relativeTo(root).path}:${funcNode.startPoint.row + 1}")
+                    val relativePath = if (file.absolutePath.startsWith(root.absolutePath)) {
+                        file.relativeTo(root).path.replace(File.separatorChar, '/')
+                    } else {
+                        file.absolutePath.replace(File.separatorChar, '/')
+                    }
+                    results.add("- $out() called from $relativePath:${funcNode.startPoint.row + 1}")
                 }
             }
         }
@@ -107,11 +112,11 @@ private fun extractOutgoingCalls(node: TSNode, parsed: ParsedFile, identifierTyp
     return results
 }
 
-private fun findIncomingCalls(root: File, symbol: String, astCache: AstCache): String {
+private fun findIncomingCalls(root: File, symbol: String, astCache: AstCache, externalRoots: List<File>): String {
     val results = mutableListOf<String>()
     
     // We reuse the first pass of find_references: text search for the symbol to find candidate files
-    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+    val projectFiles = listProjectFiles(root, externalRoots).sortedBy { it.path }
     val candidates = projectFiles.filter { file ->
         val lang = languageNameFor(file.extension)
         lang != null && file.readText().contains(symbol)
@@ -156,10 +161,15 @@ private fun findIncomingCalls(root: File, symbol: String, astCache: AstCache): S
             if (enclosingFunction != null) {
                 val funcName = extractFunctionName(enclosingFunction, parsed)
                 if (funcName != null) {
-                    val callerId = "${file.relativeTo(root).path} : $funcName"
+                    val relativePath = if (file.absolutePath.startsWith(root.absolutePath)) {
+                        file.relativeTo(root).path.replace(File.separatorChar, '/')
+                    } else {
+                        file.absolutePath.replace(File.separatorChar, '/')
+                    }
+                    val callerId = "$relativePath : $funcName"
                     if (callersFound.add(callerId)) {
                         val line = enclosingFunction.startPoint.row + 1
-                        results.add("- $funcName() in ${file.relativeTo(root).path}:$line")
+                        results.add("- $funcName() in $relativePath:$line")
                     }
                 }
             }

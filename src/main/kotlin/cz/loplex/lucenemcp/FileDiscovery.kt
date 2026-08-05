@@ -24,9 +24,20 @@ const val MAX_INDEXABLE_FILE_BYTES = 2_000_000L
  * so results exactly match what `.gitignore` (and friends) would allow, without needing to
  * reimplement gitignore semantics. Falls back to a pruned filesystem walk otherwise.
  */
-fun listProjectFiles(root: File): List<File> {
-    tryGitLsFiles(root)?.let { return it }
-    return walkWithIgnore(root)
+fun listProjectFiles(root: File, externalRoots: List<File> = emptyList()): List<File> {
+    val results = mutableListOf<File>()
+    val gitFiles = tryGitLsFiles(root)
+    if (gitFiles != null) {
+        results.addAll(gitFiles)
+    } else {
+        results.addAll(walkWithIgnore(root))
+    }
+    for (extRoot in externalRoots) {
+        if (extRoot.exists()) {
+            results.addAll(walkWithIgnore(extRoot))
+        }
+    }
+    return results
 }
 
 private fun tryGitLsFiles(root: File): List<File>? {

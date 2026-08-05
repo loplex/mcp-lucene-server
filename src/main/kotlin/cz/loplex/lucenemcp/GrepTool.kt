@@ -19,7 +19,7 @@ private data class GrepMatch(val path: String, val lineNumber: Int, val context:
 private data class FileMatchCount(val path: String, val count: Int)
 
 /** Direct filesystem regex/literal search with line numbers and context — always reflects the current file content. */
-fun runGrep(root: File, options: GrepOptions): String {
+fun runGrep(root: File, options: GrepOptions, externalRoots: List<File> = emptyList()): String {
     val regex = try {
         val source = if (options.literal) Pattern.quote(options.pattern) else options.pattern
         val flags = if (options.caseSensitive) 0 else Pattern.CASE_INSENSITIVE
@@ -30,9 +30,14 @@ fun runGrep(root: File, options: GrepOptions): String {
 
     val globRegex: Regex? = options.filePattern?.let { globToRegex(it) }
 
-    val files = listProjectFiles(root)
+    val files = listProjectFiles(root, externalRoots)
         .filter { file ->
-            globRegex == null || globRegex.matches(file.relativeTo(root).path.replace(File.separatorChar, '/'))
+            val relativePath = if (file.absolutePath.startsWith(root.absolutePath)) {
+                file.relativeTo(root).path.replace(File.separatorChar, '/')
+            } else {
+                file.absolutePath.replace(File.separatorChar, '/')
+            }
+            globRegex == null || globRegex.matches(relativePath)
         }
         .sortedBy { it.path }
 
@@ -51,7 +56,11 @@ fun runGrep(root: File, options: GrepOptions): String {
             continue
         }
 
-        val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
+        val relativePath = if (file.absolutePath.startsWith(root.absolutePath)) {
+            file.relativeTo(root).path.replace(File.separatorChar, '/')
+        } else {
+            file.absolutePath.replace(File.separatorChar, '/')
+        }
         var matchesInThisFile = 0
 
         for (i in lines.indices) {

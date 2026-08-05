@@ -28,14 +28,18 @@ private class FileContext(val file: File, val relativePath: String, val language
  * rather than silently dropped or misclassified by [classifyReferenceKind] (a class name is, for
  * example, structurally a `type_identifier` like any other type reference).
  */
-fun findReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): List<ReferenceMatch> {
-    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+fun findReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache(), externalRoots: List<File> = emptyList()): List<ReferenceMatch> {
+    val projectFiles = listProjectFiles(root, externalRoots).sortedBy { it.path }
     astCache.prune(projectFiles.mapTo(HashSet()) { it.absolutePath })
 
     val contexts = projectFiles.mapNotNull { file ->
         val languageName = languageNameFor(file.extension) ?: return@mapNotNull null
         val parsed = astCache.getOrParse(file, file.extension) ?: return@mapNotNull null
-        val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
+        val relativePath = if (file.absolutePath.startsWith(root.absolutePath)) {
+            file.relativeTo(root).path.replace(File.separatorChar, '/')
+        } else {
+            file.absolutePath.replace(File.separatorChar, '/')
+        }
         FileContext(file, relativePath, languageName, parsed)
     }
 
@@ -108,14 +112,14 @@ fun findReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCac
     return results
 }
 
-fun runFindReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache()): String {
+fun runFindReferences(root: File, symbol: String, maxMatches: Int, astCache: AstCache = AstCache(), externalRoots: List<File> = emptyList()): String {
     val trimmed = symbol.trim()
     if (trimmed.isEmpty()) return "Missing required argument: symbol"
     if (!IDENTIFIER.matches(trimmed)) {
         return "Invalid symbol: only identifier characters are supported (letters, digits, underscore, not starting with a digit)."
     }
 
-    val matches = findReferences(root, trimmed, maxMatches, astCache)
+    val matches = findReferences(root, trimmed, maxMatches, astCache, externalRoots)
     if (matches.isEmpty()) {
         return "No references found for '$trimmed'. AST-based search covers: " +
             "${SUPPORTED_AST_EXTENSIONS.sorted().joinToString(", ")} files. " +

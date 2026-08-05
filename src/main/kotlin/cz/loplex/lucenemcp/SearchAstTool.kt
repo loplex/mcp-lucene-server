@@ -7,14 +7,14 @@ import java.io.File
 import java.nio.file.FileSystems
 import java.nio.file.PathMatcher
 
-fun runSearchAst(root: File, queryStr: String, languageName: String, pathPattern: String?, astCache: AstCache = AstCache()): String {
+fun runSearchAst(root: File, queryStr: String, languageName: String, pathPattern: String?, astCache: AstCache = AstCache(), externalRoots: List<File> = emptyList()): String {
     if (queryStr.isBlank()) return "Missing required argument: query"
     if (languageName.isBlank()) return "Missing required argument: language"
 
     val query = compiledQuery(languageName, queryStr)
         ?: return "Failed to compile tree-sitter query for language '$languageName'. Check syntax or unsupported language."
 
-    val projectFiles = listProjectFiles(root).sortedBy { it.path }
+    val projectFiles = listProjectFiles(root, externalRoots).sortedBy { it.path }
     astCache.prune(projectFiles.mapTo(HashSet()) { it.absolutePath })
 
     var matcher: PathMatcher? = null
@@ -30,9 +30,13 @@ fun runSearchAst(root: File, queryStr: String, languageName: String, pathPattern
     var matchCount = 0
 
     for (file in projectFiles) {
+        val relativePathForMatch = if (file.absolutePath.startsWith(root.absolutePath)) {
+            file.relativeTo(root).path.replace(File.separatorChar, '/')
+        } else {
+            file.absolutePath.replace(File.separatorChar, '/')
+        }
         if (matcher != null) {
-            val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
-            if (!matcher.matches(File(relativePath).toPath())) continue
+            if (!matcher.matches(File(relativePathForMatch).toPath())) continue
         }
 
         val fileLang = languageNameFor(file.extension)
@@ -47,8 +51,7 @@ fun runSearchAst(root: File, queryStr: String, languageName: String, pathPattern
         var fileHasMatches = false
         while (cursor.nextMatch(match)) {
             if (!fileHasMatches) {
-                val relativePath = file.relativeTo(root).path.replace(File.separatorChar, '/')
-                results.add("\n--- $relativePath ---")
+                results.add("\n--- $relativePathForMatch ---")
                 fileHasMatches = true
             }
             

@@ -157,40 +157,90 @@ fun startHttpServer(
     astCache: AstCache
 ) {
     val server = HttpServer.create(InetSocketAddress(httpOptions.host, httpOptions.port), 0)
+    val activeSessions = java.util.concurrent.ConcurrentHashMap<String, java.io.OutputStream>()
     
-    server.createContext("/") { exchange ->
+    server.createContext("/sse") { exchange ->
+        if (exchange.requestMethod == "GET") {
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.responseHeaders.add("Cache-Control", "no-cache")
+            exchange.responseHeaders.add("Connection", "keep-alive")
+            exchange.sendResponseHeaders(200, 0) // 0 means chunked transfer
+            
+            val sessionId = java.util.UUID.randomUUID().toString()
+            val os = exchange.responseBody
+            activeSessions[sessionId] = os
+            
+            try {
+                // Send the required "endpoint" event so the client knows where to POST
+                val endpointUrl = "http://${httpOptions.host}:${httpOptions.port}/message?sessionId=$sessionId"
+                val event = "event: endpoint\ndata: $endpointUrl\n\n"
+                synchronized(os) {
+                    os.write(event.toByteArray(Charsets.UTF_8))
+                    os.flush()
+                }
+                
+                // Keep connection open and detect disconnects via periodic pings
+                while (true) {
+                    Thread.sleep(15000)
+                    synchronized(os) {
+                        os.write(": ping\n\n".toByteArray(Charsets.UTF_8))
+                        os.flush()
+                    }
+                }
+            } catch (e: Exception) {
+                // Client disconnected or stream closed
+            } finally {
+                activeSessions.remove(sessionId)
+                exchange.close()
+            }
+        } else {
+            exchange.sendResponseHeaders(405, -1)
+            exchange.close()
+        }
+    }
+    
+    server.createContext("/message") { exchange ->
         if (exchange.requestMethod == "POST") {
             try {
+                val query = exchange.requestURI.query ?: ""
+                val sessionIdParam = query.split("&").find { it.startsWith("sessionId=") }
+                val sessionId = sessionIdParam?.substringAfter("sessionId=")
+                
+                val os = if (sessionId != null) activeSessions[sessionId] else null
+                if (os == null) {
+                    exchange.sendResponseHeaders(404, -1) // Session not found
+                    exchange.close()
+                    return@createContext
+                }
+                
                 val reader = InputStreamReader(exchange.requestBody, "UTF-8")
                 val requestBody = reader.readText()
-                
                 val responseStr = processRequest(requestBody, gson, indexManager, analyzer, targetDir, watcherStarted, astCache)
                 
                 if (responseStr != null) {
-                    val responseBytes = responseStr.toByteArray(Charsets.UTF_8)
-                    exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
-                    exchange.sendResponseHeaders(200, responseBytes.size.toLong())
-                    exchange.responseBody.use { os ->
-                        os.write(responseBytes)
+                    val event = "event: message\ndata: $responseStr\n\n"
+                    synchronized(os) {
+                        os.write(event.toByteArray(Charsets.UTF_8))
+                        os.flush()
                     }
-                } else {
-                    exchange.sendResponseHeaders(400, -1)
                 }
+                
+                exchange.sendResponseHeaders(202, -1) // Accepted
             } catch (e: Exception) {
-                System.err.println("HTTP Error: ${e.message}")
+                System.err.println("HTTP Error on /message: ${e.message}")
                 exchange.sendResponseHeaders(500, -1)
             } finally {
                 exchange.close()
             }
         } else {
-            exchange.sendResponseHeaders(405, -1) // Method Not Allowed
+            exchange.sendResponseHeaders(405, -1)
             exchange.close()
         }
     }
     
     server.executor = java.util.concurrent.Executors.newCachedThreadPool()
     server.start()
-    System.err.println("MCP Lucene Server listening on http://${httpOptions.host}:${httpOptions.port}")
+    System.err.println("MCP Lucene Server listening for SSE on http://${httpOptions.host}:${httpOptions.port}/sse")
     
     // Block the main thread since the server runs in a daemon thread
     Thread.currentThread().join()

@@ -177,6 +177,13 @@ fun handleFindDefinition(arguments: JsonObject, root: File, astCache: AstCache, 
     return runFindDefinition(root, symbol, maxMatches, astCache, externalRoots)
 }
 
+fun handleExtractSymbol(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
+    val symbol = arguments.get("symbol")?.asString
+    if (symbol.isNullOrBlank()) return "Missing required argument: symbol"
+    val maxMatches = arguments.get("maxMatches")?.asInt ?: DEFAULT_GREP_LIMIT
+    return runExtractSymbol(root, symbol, maxMatches, astCache, externalRoots)
+}
+
 fun handleFindReferences(arguments: JsonObject, root: File, astCache: AstCache, externalRoots: List<File>): String {
     val symbol = arguments.get("symbol")?.asString
     if (symbol.isNullOrBlank()) return "Missing required argument: symbol"

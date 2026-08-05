@@ -58,15 +58,17 @@ replace the built-in Grep/Glob/Read tools for this project. It exposes eleven to
 2. Need the declaration site of a symbol, not every mention → `find_definition`.
 3. Need every real call/usage site of a symbol, excluding comments/strings → `find_references`.
 4. Need who extends/implements a class/interface/trait → `find_implementations`.
-5. Fuzzy/conceptual query, word-form variations, or want ranked relevance → `search_code`.
-6. Need to enumerate files by name/extension → `list_files`.
-7. Have a `file:line` hit and need the surrounding code → `read_file` with a line range.
-8. Need a quick structural overview of one file (its classes/functions/properties) before deciding
-   what to read → `outline`.
-9. Need to trace caller/callee relationships → `call_hierarchy`.
-10. Need custom structural search → `search_ast`.
-11. Need to index Maven dependencies dynamically → `add_maven_dependency_sources` (e.g. `org.springframework:spring-core:6.1.0`).
-12. Need to index other local dependency folders → `add_external_roots` (Note: `.m2` dependency paths containing `*-sources.jar` files will be automatically unzipped and parsed on the fly!).
+5. Need to read an exact line range in a known file → `read_file`.
+6. Need to read the entire body of a specific function, class, or type without knowing its line range → `extract_symbol`.
+7. Fuzzy/conceptual query, word-form variations, or want ranked relevance → `search_code`.
+8. Need to enumerate files by name/extension → `list_files`.
+9. Have a `file:line` hit and need the surrounding code → `read_file` with a line range.
+10. Need a quick structural overview of one file (its classes/functions/properties) before deciding
+    what to read → `outline`.
+11. Need to trace caller/callee relationships → `call_hierarchy`.
+12. Need custom structural search → `search_ast`.
+13. Need to index Maven dependencies dynamically → `add_maven_dependency_sources` (e.g. `org.springframework:spring-core:6.1.0`).
+14. Need to index other local dependency folders → `add_external_roots` (Note: `.m2` dependency paths containing `*-sources.jar` files will be automatically unzipped and parsed on the fly!).
 
 ## Goal
 Keep your active session memory minimal. Run a targeted query first, retrieve only the relevant

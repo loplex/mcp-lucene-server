@@ -36,6 +36,7 @@ fun handleToolCall(
             "read_file" -> handleReadFile(arguments, root)
             "list_files" -> handleListFiles(arguments, root, externalRoots)
             "find_definition" -> handleFindDefinition(arguments, root, astCache, externalRoots)
+            "extract_symbol" -> handleExtractSymbol(arguments, root, astCache, externalRoots)
             "find_references" -> handleFindReferences(arguments, root, astCache, externalRoots)
             "find_implementations" -> handleFindImplementations(arguments, root, astCache, externalRoots)
             "outline" -> handleOutline(arguments, root, astCache)
@@ -118,6 +119,16 @@ fun createToolsListResponse(id: JsonElement): JsonObject {
     tools.add(tool(
         name = "find_definition",
         description = "Finds where a symbol is DEFINED (class/interface/object/function/property/...), as opposed to grep_code, which finds every mention including call sites, imports, and comments. Backed by a real tree-sitter parse tree (not regex/text matching), so a symbol name appearing inside a comment or string literal is never mistaken for a definition. Supported extensions: kt, kts, java, ts, tsx, js, jsx, mjs, py, go, rs. Always reads current file content, independent of the index.",
+        properties = linkedMapOf(
+            "symbol" to prop("string", "Exact symbol name (identifier), e.g. 'UserService'."),
+            "maxMatches" to prop("number", "Maximum number of returned definitions (default $DEFAULT_GREP_LIMIT).")
+        ),
+        required = listOf("symbol")
+    ))
+
+    tools.add(tool(
+        name = "extract_symbol",
+        description = "Finds where a symbol is DEFINED and extracts its full source code. Perfect for retrieving the entire body of a class or function by its name without having to guess its line boundaries using read_file.",
         properties = linkedMapOf(
             "symbol" to prop("string", "Exact symbol name (identifier), e.g. 'UserService'."),
             "maxMatches" to prop("number", "Maximum number of returned definitions (default $DEFAULT_GREP_LIMIT).")

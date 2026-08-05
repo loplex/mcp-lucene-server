@@ -60,7 +60,7 @@ fun parseFile(file: File, extension: String): ParsedFile? {
 }
 
 /** One place in [parsed] where [symbol] is defined as [kind] — the name node's own byte range. */
-data class DefinitionHit(val range: LongRange, val kind: String, val nameNode: TSNode)
+data class DefinitionHit(val range: LongRange, val kind: String, val nameNode: TSNode, val defNode: TSNode)
 
 /**
  * Runs every [DefinitionQuery] for [languageName] (see [DEFINITIONS_BY_LANGUAGE]) against
@@ -87,9 +87,13 @@ fun definitionHitsInFile(parsed: ParsedFile, languageName: String, symbol: Strin
                 ?.node ?: continue
             if (symbol != null && parsed.textOf(nameNode) != symbol) continue
 
+            val defNode = match.captures
+                .firstOrNull { query.getCaptureNameForId(it.index).startsWith("definition.") }
+                ?.node ?: nameNode
+
             val range = nameNode.startByte.toLong()..nameNode.endByte.toLong()
             if (!claimedRanges.add(range)) continue // already claimed by a higher-priority pattern
-            hits.add(DefinitionHit(range, defQuery.kind, nameNode))
+            hits.add(DefinitionHit(range, defQuery.kind, nameNode, defNode))
         }
     }
     return hits
